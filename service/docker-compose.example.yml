@@ -1,0 +1,22 @@
+services:
+  jingo:
+    build:
+      context: ..                 # repo root, so engine/ is in context
+      dockerfile: service/Dockerfile
+    image: jingo:local
+    container_name: jingo
+    restart: unless-stopped
+    env_file: .env                # provide WEBWORK_JWT_SECRET here (shared w/ ADAPT), not in git
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      JINGO_ENGINE_MODEL_DIR: /opt/libretexts/jingo/model/wav2vec2-xlsr-53-espeak-ct2
+      JINGO_RECORDS_DIR: /opt/libretexts/jingo/records
+      JINGO_ALLOWED_ORIGIN: https://adapt.example.org
+    volumes:
+      - ./model:/opt/libretexts/jingo/model:ro
+      - ./records:/opt/libretexts/jingo/records:ro
+    networks: [default, adapt_adapt]
+networks:
+  adapt_adapt:
+    external: true                # the ADAPT docker network (minio lives here)

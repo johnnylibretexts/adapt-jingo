@@ -1,0 +1,327 @@
+{
+  "manifest": {
+    "course_title": "French 1 — Sons et mots",
+    "language": "fr",
+    "version": "1.0.0"
+  },
+  "course_code": "FREN-1",
+  "units": [
+    {
+      "id": "fr-u1",
+      "title": "Sons et salutations",
+      "order": 1,
+      "lessons": [
+        {
+          "id": "fr-u1-l1",
+          "title": "Voyelles",
+          "order": 1,
+          "drills": [
+            {
+              "id": "fr-u1-l1-e1",
+              "type": "pronunciation",
+              "prompt": "Répétez : /a/ — «pâte»",
+              "target_text": "pâte",
+              "grading": "score",
+              "phonetics_record": {
+                "lang": "fr",
+                "phones": [
+                  "p",
+                  "aː",
+                  "t"
+                ],
+                "ids": [
+                  18,
+                  73,
+                  6
+                ],
+                "words": [
+                  {
+                    "start": 0,
+                    "len": 3,
+                    "phones": [
+                      "p",
+                      "aː",
+                      "t"
+                    ]
+                  }
+                ],
+                "coverage": 1.0,
+                "unknown": [],
+                "espeak_voice": "fr-fr"
+              }
+            },
+            {
+              "id": "fr-u1-l1-e2",
+              "type": "pronunciation",
+              "prompt": "/e/ — «été»",
+              "target_text": "été",
+              "grading": "completion",
+              "phonetics_record": {
+                "lang": "fr",
+                "phones": [
+                  "e",
+                  "t",
+                  "e"
+                ],
+                "ids": [
+                  16,
+                  6,
+                  16
+                ],
+                "words": [
+                  {
+                    "start": 0,
+                    "len": 3,
+                    "phones": [
+                      "e",
+                      "t",
+                      "e"
+                    ]
+                  }
+                ],
+                "coverage": 1.0,
+                "unknown": [],
+                "espeak_voice": "fr-fr"
+              }
+            },
+            {
+              "id": "fr-u1-l1-e3",
+              "type": "pronunciation",
+              "prompt": "/i/ — «midi»",
+              "target_text": "midi",
+              "grading": "completion",
+              "phonetics_record": {
+                "lang": "fr",
+                "phones": [
+                  "m",
+                  "i",
+                  "d",
+                  "i"
+                ],
+                "ids": [
+                  13,
+                  10,
+                  12,
+                  10
+                ],
+                "words": [
+                  {
+                    "start": 0,
+                    "len": 4,
+                    "phones": [
+                      "m",
+                      "i",
+                      "d",
+                      "i"
+                    ]
+                  }
+                ],
+                "coverage": 1.0,
+                "unknown": [],
+                "espeak_voice": "fr-fr"
+              }
+            },
+            {
+              "id": "fr-u1-l1-e4",
+              "type": "pronunciation",
+              "prompt": "/o/ — «mot»",
+              "target_text": "mot",
+              "grading": "completion",
+              "phonetics_record": {
+                "lang": "fr",
+                "phones": [
+                  "m",
+                  "o"
+                ],
+                "ids": [
+                  13,
+                  19
+                ],
+                "words": [
+                  {
+                    "start": 0,
+                    "len": 2,
+                    "phones": [
+                      "m",
+                      "o"
+                    ]
+                  }
+                ],
+                "coverage": 1.0,
+                "unknown": [],
+                "espeak_voice": "fr-fr"
+              }
+            },
+            {
+              "id": "fr-u1-l1-e5",
+              "type": "pronunciation",
+              "prompt": "/u/ — «où»",
+              "target_text": "où",
+              "grading": "completion",
+              "phonetics_record": {
+                "lang": "fr",
+                "phones": [
+                  "u"
+                ],
+                "ids": [
+                  34
+                ],
+                "words": [
+                  {
+                    "start": 0,
+                    "len": 1,
+                    "phones": [
+                      "u"
+                    ]
+                  }
+                ],
+                "coverage": 1.0,
+                "unknown": [],
+                "espeak_voice": "fr-fr"
+              }
+            },
+            {
+              "id": "fr-u1-l1-e6",
+              "type": "pronunciation",
+              "prompt": "/y/ — «lune»",
+              "target_text": "lune",
+              "grading": "completion",
+              "phonetics_record": {
+                "lang": "fr",
+                "phones": [
+                  "l",
+                  "y",
+                  "n"
+                ],
+                "ids": [
+                  8,
+                  47,
+                  4
+                ],
+                "words": [
+                  {
+                    "start": 0,
+                    "len": 3,
+                    "phones": [
+                      "l",
+                      "y",
+                      "n"
+                    ]
+                  }
+                ],
+                "coverage": 1.0,
+                "unknown": [],
+                "espeak_voice": "fr-fr"
+              }
+            },
+            {
+              "id": "fr-u1-l1-q1",
+              "type": "qti-mc",
+              "prompt": "Comment dit-on «hello» ?",
+              "qti_spec": {
+                "type": "multiple_choice",
+                "prompt": "Comment dit-on «hello» ?",
+                "choices": [
+                  [
+                    "bonjour",
+                    true
+                  ],
+                  [
+                    "au revoir",
+                    false
+                  ],
+                  [
+                    "merci",
+                    false
+                  ]
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "fr-u1-l2",
+          "title": "Le son /y/ vs /u/",
+          "order": 2,
+          "drills": [
+            {
+              "id": "fr-u1-l2-e1",
+              "type": "pronunciation",
+              "prompt": "Répétez : «tu» (/y/)",
+              "target_text": "tu",
+              "grading": "completion",
+              "phonetics_record": {
+                "lang": "fr",
+                "phones": [
+                  "t",
+                  "y"
+                ],
+                "ids": [
+                  6,
+                  47
+                ],
+                "words": [
+                  {
+                    "start": 0,
+                    "len": 2,
+                    "phones": [
+                      "t",
+                      "y"
+                    ]
+                  }
+                ],
+                "coverage": 1.0,
+                "unknown": [],
+                "espeak_voice": "fr-fr"
+              }
+            },
+            {
+              "id": "fr-u1-l2-e2",
+              "type": "pronunciation",
+              "prompt": "Répétez : «tout» (/u/)",
+              "target_text": "tout",
+              "grading": "completion",
+              "phonetics_record": {
+                "lang": "fr",
+                "phones": [
+                  "t",
+                  "u"
+                ],
+                "ids": [
+                  6,
+                  34
+                ],
+                "words": [
+                  {
+                    "start": 0,
+                    "len": 2,
+                    "phones": [
+                      "t",
+                      "u"
+                    ]
+                  }
+                ],
+                "coverage": 1.0,
+                "unknown": [],
+                "espeak_voice": "fr-fr"
+              }
+            }
+          ]
+        }
+      ],
+      "exam": {
+        "title": "Examen Unité 1",
+        "questions": [
+          {
+            "exercise_id": "fr-u1-l1-e1",
+            "points": 5
+          },
+          {
+            "exercise_id": "fr-u1-l1-q1",
+            "points": 3
+          }
+        ]
+      }
+    }
+  ]
+}

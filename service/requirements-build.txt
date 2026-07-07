@@ -1,0 +1,4 @@
+# Build-time only — requires espeak (GPL). Run on the Mac with the johnny-lingo-v2 venv.
+# phonemizer>=3.11
+# espeakng-loader>=0.2.1
+# (provided by the johnny-lingo-v2 venv; listed for documentation only)
