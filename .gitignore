@@ -7,3 +7,4 @@ model/*/
 !model/README.md
 engine/dist/
 *.egg-info/
+.superpowers/
