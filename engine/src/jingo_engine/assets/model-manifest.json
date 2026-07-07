@@ -1,0 +1,49 @@
+{
+  "manifest_version": "1.0",
+  "model": {
+    "name": "wav2vec2-xlsr-53-espeak-ct2",
+    "format": "CTranslate2 Wav2Vec2 int8",
+    "source_model": "facebook/wav2vec2-xlsr-53-espeak-cv-ft",
+    "source_license": "Apache-2.0",
+    "distribution": {
+      "bundled_in_wheel": false,
+      "default_download_url": null,
+      "strategy": "private_bundle_manifest_plus_explicit_archive",
+      "hosted_artifacts": [
+        {
+          "type": "huggingface",
+          "repo_id": "johnnyrobotai/johnnylingo-jingo-wav2vec2-xlsr-53-espeak-ct2",
+          "revision": "main",
+          "commit": "c1f07065ab0489e774344ece3d487f49a9c92abd",
+          "filename": "wav2vec2-xlsr-53-espeak-ct2-v0.2.1.zip",
+          "size_bytes": 273800331,
+          "sha256": "c81c17bce9f311c0aed217312ce4c49327b27d09b6acc9004ad582cee8d77a2a",
+          "url": "https://huggingface.co/johnnyrobotai/johnnylingo-jingo-wav2vec2-xlsr-53-espeak-ct2/resolve/main/wav2vec2-xlsr-53-espeak-ct2-v0.2.1.zip",
+          "verified_at": "2026-07-05"
+        }
+      ]
+    },
+    "required_files": [
+      {
+        "path": "model.bin",
+        "size_bytes": 317779386,
+        "sha256": "911f57e20cde2b47eb2996cc53608b108074360280b156b07616eb5effa2975e"
+      },
+      {
+        "path": "config.json",
+        "size_bytes": 3,
+        "sha256": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356"
+      },
+      {
+        "path": "vocabulary.json",
+        "size_bytes": 5037,
+        "sha256": "945dffdc7990fa8c553bdf2f52d4f11f87b1eeb24758dcdad0873bc9208c36db"
+      }
+    ],
+    "caveats": [
+      "The CT2 model is not bundled in the johnnylingo-jingo wheel.",
+      "The default calibration is provisional and not human-label validated.",
+      "Thresholds are channel-sensitive; host apps should validate on their own audio path."
+    ]
+  }
+}

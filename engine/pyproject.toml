@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "johnnylingo-jingo"
+version = "0.2.1"
+description = "Portable per-phoneme pronunciation-scoring engine (GOP over a CTranslate2 wav2vec2 phone-CTC model). Torch-free at runtime."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE", "NOTICE.md", "THIRD_PARTY_NOTICES.md"]
+authors = [{ name = "Johnny Robot" }]
+keywords = ["pronunciation", "language-learning", "gop", "wav2vec2", "ctranslate2"]
+dependencies = [
+    "numpy>=1.24",
+    "ctranslate2>=4.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/johnnyrobot/johnny-lingo-v2"
+Documentation = "https://github.com/johnnyrobot/johnny-lingo-v2/blob/main/docs/jingo-engine-integration-guide.md"
+Source = "https://github.com/johnnyrobot/johnny-lingo-v2/tree/main/engine"
+
+[project.optional-dependencies]
+# Build-time G2P (GPL espeak toolchain - never shipped with a product):
+g2p = ["phonemizer>=3.2", "espeakng-loader"]
+
+[project.scripts]
+jingo-engine-model = "jingo_engine.model_assets:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+jingo_engine = ["assets/*.json"]
