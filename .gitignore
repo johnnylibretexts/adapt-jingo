@@ -2,6 +2,8 @@
 __pycache__/
 *.pyc
 .pytest_cache/
-model/*/            # never commit model weights
+# never commit model weights (the CT2 model is obtained at deploy time)
+model/*/
+!model/README.md
 engine/dist/
 *.egg-info/

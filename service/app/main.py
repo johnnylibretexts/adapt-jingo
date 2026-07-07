@@ -1,4 +1,4 @@
-"""jingo.libretexts.dev — thin FastAPI adapter around jingo_engine.
+"""jingo — thin FastAPI pronunciation-scoring adapter around jingo_engine.
 
 Engine purity: this file is the only place that imports jingo_engine + the
 app glue modules; jingo_engine itself stays framework-free. The engine is
@@ -43,7 +43,7 @@ class ScoreRequest(BaseModel):
     audio_url: str
 
 
-app = FastAPI(title="jingo.libretexts.dev", version="0.1.0")
+app = FastAPI(title="jingo pronunciation scorer", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[config.ALLOWED_ORIGIN],
