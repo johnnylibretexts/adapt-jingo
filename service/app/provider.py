@@ -9,8 +9,23 @@ Records are built on the Mac (G2P, build-time only) and embedded in content
 packs; the import command writes them here. espeak never runs in this service.
 """
 import json
+import re
 from pathlib import Path
 from typing import Dict, Optional
+
+# language / exercise_id are attacker-influenceable (come from the request
+# body). Restrict to a safe id charset -- this also rejects "." and ".."
+# and anything containing "/" or "\" since those characters aren't in the
+# allowed set.
+_SAFE_ID_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+
+
+def _is_safe_id(value: str) -> bool:
+    if not _SAFE_ID_RE.match(value):
+        return False
+    if value in (".", ".."):
+        return False
+    return True
 
 
 class JsonPhoneticsProvider:
@@ -18,6 +33,8 @@ class JsonPhoneticsProvider:
         self.records_dir = Path(records_dir)
 
     def get(self, language: str, exercise_id: str) -> Optional[dict]:
+        if not (_is_safe_id(language) and _is_safe_id(exercise_id)):
+            return None
         path = self.records_dir / language / f"{exercise_id}.json"
         if not path.exists():
             return None

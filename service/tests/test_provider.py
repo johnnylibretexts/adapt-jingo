@@ -37,3 +37,43 @@ def test_tag_map_returns_map_dict(tmp_path):
 def test_tag_map_empty_when_missing(tmp_path):
     prov = JsonPhoneticsProvider(records_dir=str(tmp_path))
     assert prov.tag_map("xx") == {}
+
+
+def test_get_rejects_path_traversal_in_exercise_id(tmp_path):
+    # records_dir/es must exist so the traversal path is actually reachable
+    # at the OS level -- proving the guard (not a missing intermediate dir)
+    # is what blocks the read.
+    (tmp_path / "es").mkdir(parents=True)
+    secret = tmp_path / "secret.json"
+    secret.write_text(json.dumps({"leaked": True}))
+    prov = JsonPhoneticsProvider(records_dir=str(tmp_path))
+    assert prov.get("es", "../secret") is None
+    assert prov.get("es", "..") is None
+    assert prov.get("es", ".") is None
+    assert prov.get("es", "a/b") is None
+    assert prov.get("es", "a\\b") is None
+
+
+def test_get_rejects_path_traversal_in_language(tmp_path):
+    # records_dir must exist for the ".." to be reachable at the OS level;
+    # plant a sibling dir "foo" with the target file to prove escape works
+    # absent the guard.
+    records_dir = tmp_path / "records"
+    records_dir.mkdir()
+    _write(tmp_path, "foo/x.json", {"leaked": True})
+    prov = JsonPhoneticsProvider(records_dir=str(records_dir))
+    assert prov.get("../foo", "x") is None
+    assert prov.get("..", "x") is None
+    assert prov.get(".", "x") is None
+    assert prov.get("a/b", "x") is None
+
+
+def test_get_still_resolves_normal_id(tmp_path):
+    _write(tmp_path, "es/es-u1-l1-e1.json", {
+        "lang": "es", "phones": ["a"], "ids": [5],
+        "words": [], "coverage": 1.0, "unknown": [], "espeak_voice": "es-419",
+    })
+    prov = JsonPhoneticsProvider(records_dir=str(tmp_path))
+    rec = prov.get("es", "es-u1-l1-e1")
+    assert rec is not None
+    assert rec["ids"] == [5]
