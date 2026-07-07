@@ -1,0 +1,436 @@
+From 05614b71925627c181dc39de6aff7f2ba8927a02 Mon Sep 17 00:00:00 2001
+From: johnnylibretexts <264531926+johnnylibretexts@users.noreply.github.com>
+Date: Mon, 6 Jul 2026 22:03:38 -0700
+Subject: [PATCH 4/8] feat(pronunciation): custom recorder with auto-stop VAD +
+ explicit submit
+
+Replace the vue-audio-recorder widget in PronunciationQuestion.vue with a
+purpose-built recorder:
+- getUserMedia + ScriptProcessor capturing PCM and mic energy in one graph
+- energy-based VAD auto-stops ~1.2s after the student stops speaking
+  (manual Stop still available); guards min/max duration
+- native <audio> playback + an explicit "Submit for scoring" button,
+  replacing the widget's hidden disk/save icon
+- rejects empty/silent takes before submitting
+- encodes mp3 client-side via lamejs (satisfies ADAPT's audio/mpeg-only
+  upload check); uploads via axios, then the existing /score + gradeback flow
+- tight, self-owned layout (no CSS overrides against a third-party widget)
+
+Add lamejs as a direct dependency (previously only transitive via
+vue-audio-recorder).
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01CRePd9rbvtz6UqFuuYMi9U
+---
+ package.json                                  |   1 +
+ .../questions/PronunciationQuestion.vue       | 339 +++++++++++++++---
+ 2 files changed, 296 insertions(+), 44 deletions(-)
+
+diff --git a/package.json b/package.json
+index 52ef910d..345c3bab 100644
+--- a/package.json
++++ b/package.json
+@@ -30,6 +30,7 @@
+     "iframe-resizer": "^4.2.11",
+     "jquery": "^3.5.1",
+     "js-cookie": "^2.2.1",
++    "lamejs": "^1.2.0",
+     "popper.js": "^1.16.1",
+     "qr-code-styling": "^1.6.0-rc.1",
+     "sortablejs": "^1.14.0",
+diff --git a/resources/js/components/questions/PronunciationQuestion.vue b/resources/js/components/questions/PronunciationQuestion.vue
+index 67047c8d..409f7b80 100644
+--- a/resources/js/components/questions/PronunciationQuestion.vue
++++ b/resources/js/components/questions/PronunciationQuestion.vue
+@@ -6,18 +6,41 @@
+       Provisional — channel-sensitive, treat as approximate.
+     </p>
+ 
+-    <audio-recorder
+-      v-if="!feedback && !submitting"
+-      :key="questionId"
+-      ref="recorder"
+-      class="m-auto"
+-      :upload-url="audioUploadUrl"
+-      :time="1"
+-      :successful-upload="onUploaded"
+-      :failed-upload="onFailed"
+-    />
+-
+-    <div v-if="submitting" class="pron-submitting">Scoring your attempt…</div>
++    <div v-if="!feedback" class="pron-recorder">
++      <!-- IDLE -->
++      <div v-if="state === 'idle'" class="pron-stage text-center">
++        <button type="button" class="btn btn-primary pron-mic" @click="startRecording">
++          <span class="pron-mic-dot"></span> Record
++        </button>
++        <p class="pron-hint small text-muted mt-2">
++          Tap record and say the prompt aloud. Recording stops on its own when you finish.
++        </p>
++      </div>
++
++      <!-- RECORDING -->
++      <div v-else-if="state === 'recording'" class="pron-stage text-center">
++        <div class="pron-live">
++          <span class="pron-rec-dot"></span> Recording… {{ elapsedLabel }}
++        </div>
++        <div class="pron-meter" aria-hidden="true">
++          <div class="pron-meter-fill" :style="{ width: meterWidth }"></div>
++        </div>
++        <button type="button" class="btn btn-outline-secondary btn-sm mt-2" @click="stopRecording">
++          Stop
++        </button>
++        <p class="pron-hint small text-muted mt-1">Stops automatically after you stop speaking.</p>
++      </div>
++
++      <!-- RECORDED / SUBMITTING -->
++      <div v-else-if="state === 'recorded' || state === 'submitting'" class="pron-stage text-center">
++        <audio v-if="audioUrl" :src="audioUrl" controls class="pron-audio"></audio>
++        <div v-if="state === 'submitting'" class="pron-submitting mt-2">Scoring your attempt…</div>
++        <div v-else class="pron-actions mt-2">
++          <button type="button" class="btn btn-primary" @click="submitForScoring">Submit for scoring</button>
++          <button type="button" class="btn btn-link btn-sm ml-1" @click="reRecord">Re-record</button>
++        </div>
++      </div>
++    </div>
+ 
+     <div v-if="feedback" class="pron-feedback mt-2">
+       <p v-if="feedback.status === 'scored'" class="pron-score">
+@@ -34,11 +57,23 @@
+       </p>
+     </div>
+ 
+-    <p v-if="error" class="pron-error text-danger">{{ error }}</p>
++    <p v-if="error" class="pron-error text-danger mt-1">{{ error }}</p>
+   </div>
+ </template>
+ 
+ <script>
++import axios from 'axios'
++import { Mp3Encoder } from 'lamejs'
++
++// --- Voice-activity / capture tuning (energy-based VAD, no ML dependency) ---
++const MIN_MS = 700          // never auto-stop within the first 0.7s
++const SILENCE_MS = 1200     // auto-stop after this much trailing silence (once speech started)
++const MAX_MS = 20000        // hard cap on a single take
++const SPEECH_RMS = 0.04     // energy above this counts as "the student is speaking"
++const SILENCE_RMS = 0.018   // energy below this counts as silence
++const MP3_KBPS = 128
++const MIN_AUDIO_BYTES = 4000 // an empty/silent take encodes tiny; reject below this
++
+ export default {
+   name: 'PronunciationQuestion',
+   props: {
+@@ -53,26 +88,189 @@ export default {
+     answerPostUrl: { type: String, default: '/api/jwt/process-answer-jwt' },
+   },
+   data() {
+-    return { feedback: null, error: null, submitting: false };
++    return {
++      state: 'idle',            // idle | recording | recorded | submitting
++      feedback: null,
++      error: null,
++      level: 0,                 // live mic energy (0..1) for the meter
++      elapsedMs: 0,
++      audioUrl: null,           // object URL for playback
++      audioBlob: null,          // encoded mp3 blob to submit
++    };
++  },
++  computed: {
++    meterWidth() {
++      return Math.round(Math.min(1, this.level) * 100) + '%';
++    },
++    elapsedLabel() {
++      const s = Math.floor(this.elapsedMs / 1000);
++      return '0:' + String(s).padStart(2, '0');
++    },
+   },
+   methods: {
+-    async onUploaded(response) {
+-      // vue-audio-recorder hands the upload response; the existing student recorder
+-      // path (questions.view.vue:4659 submittedAudioUpload) reads response.data —
+-      // same shape here. We own the upload callback so the parent's modal does NOT
+-      // fire prematurely (it fires after the gradeback below via the `scored` event).
+-      // uploadData carries submission_file_url + date_submitted (the upload controller
+-      // returns these); the gradeback response from /api/jwt/process-answer-jwt carries
+-      // only {type, message, completed_all_assignment_questions} — see Submission::store
+-      // (app/Submission.php:769-771). The parent handler uses upload.* for the file
+-      // fields and response.* for the modal/type/completion fields.
+-      const uploadData = response && response.data;
++    async startRecording() {
++      this.error = null;
++      if (!navigator.mediaDevices || !window.AudioContext && !window.webkitAudioContext) {
++        this.error = 'Recording is not supported in this browser. Try desktop Chrome.';
++        return;
++      }
++      let stream;
++      try {
++        stream = await navigator.mediaDevices.getUserMedia({
++          audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
++        });
++      } catch (e) {
++        this.error = 'Microphone access was blocked. Allow the mic and try again.';
++        return;
++      }
++
++      const AudioCtx = window.AudioContext || window.webkitAudioContext;
++      const ctx = new AudioCtx();
++      const source = ctx.createMediaStreamSource(stream);
++      const processor = ctx.createScriptProcessor(4096, 1, 1);
++
++      this._stream = stream;
++      this._ctx = ctx;
++      this._source = source;
++      this._processor = processor;
++      this._sampleRate = ctx.sampleRate;
++      this._pcm = [];
++      this._speechStarted = false;
++      this._silenceStart = 0;
++      this._recStart = (window.performance && performance.now()) || Date.now();
++
++      processor.onaudioprocess = (ev) => {
++        const input = ev.inputBuffer.getChannelData(0);
++        // Keep a copy of the samples for mp3 encoding on stop.
++        this._pcm.push(new Float32Array(input));
++
++        // Energy (RMS) for the meter and the VAD.
++        let sum = 0;
++        for (let i = 0; i < input.length; i++) sum += input[i] * input[i];
++        const rms = Math.sqrt(sum / input.length);
++        this.level = Math.min(1, rms * 8);
++
++        const now = (window.performance && performance.now()) || Date.now();
++        const elapsed = now - this._recStart;
++        if (rms > SPEECH_RMS) this._speechStarted = true;
++        if (this._speechStarted) {
++          if (rms < SILENCE_RMS) {
++            if (!this._silenceStart) this._silenceStart = now;
++            else if (now - this._silenceStart >= SILENCE_MS && elapsed >= MIN_MS) {
++              this.stopRecording();
++              return;
++            }
++          } else {
++            this._silenceStart = 0;
++          }
++        }
++        if (elapsed >= MAX_MS) this.stopRecording();
++      };
++
++      source.connect(processor);
++      // Connect to destination so onaudioprocess fires; we never write output, so it's silent (no echo).
++      processor.connect(ctx.destination);
++
++      this.state = 'recording';
++      this.elapsedMs = 0;
++      this._elapsedTimer = setInterval(() => {
++        const now = (window.performance && performance.now()) || Date.now();
++        this.elapsedMs = now - this._recStart;
++      }, 200);
++    },
++
++    stopRecording() {
++      if (this.state !== 'recording') return;
++      this._teardownAudio();
++
++      const blob = this._encodeMp3(this._pcm, this._sampleRate);
++      this._pcm = [];
++      if (!blob || blob.size < MIN_AUDIO_BYTES || !this._speechStarted) {
++        this.error = "We didn't catch any audio — record again and speak clearly.";
++        this.state = 'idle';
++        this.level = 0;
++        return;
++      }
++      if (this.audioUrl) URL.revokeObjectURL(this.audioUrl);
++      this.audioBlob = blob;
++      this.audioUrl = URL.createObjectURL(blob);
++      this.state = 'recorded';
++      this.level = 0;
++    },
++
++    reRecord() {
++      if (this.audioUrl) URL.revokeObjectURL(this.audioUrl);
++      this.audioUrl = null;
++      this.audioBlob = null;
++      this.error = null;
++      this.state = 'idle';
++    },
++
++    _teardownAudio() {
++      if (this._elapsedTimer) { clearInterval(this._elapsedTimer); this._elapsedTimer = null; }
++      if (this._processor) { try { this._processor.disconnect(); this._processor.onaudioprocess = null; } catch (e) {} }
++      if (this._source) { try { this._source.disconnect(); } catch (e) {} }
++      if (this._stream) { this._stream.getTracks().forEach((t) => t.stop()); this._stream = null; }
++      if (this._ctx) { try { this._ctx.close(); } catch (e) {} this._ctx = null; }
++    },
++
++    _encodeMp3(chunks, sampleRate) {
++      let total = 0;
++      for (const c of chunks) total += c.length;
++      if (!total) return null;
++      const pcm = new Int16Array(total);
++      let off = 0;
++      for (const c of chunks) {
++        for (let i = 0; i < c.length; i++) {
++          const s = Math.max(-1, Math.min(1, c[i]));
++          pcm[off++] = s < 0 ? s * 0x8000 : s * 0x7fff;
++        }
++      }
++      const enc = new Mp3Encoder(1, sampleRate, MP3_KBPS);
++      const block = 1152;
++      const data = [];
++      for (let i = 0; i < pcm.length; i += block) {
++        const buf = enc.encodeBuffer(pcm.subarray(i, i + block));
++        if (buf.length > 0) data.push(new Int8Array(buf));
++      }
++      const end = enc.flush();
++      if (end.length > 0) data.push(new Int8Array(end));
++      return new Blob(data, { type: 'audio/mpeg' });
++    },
++
++    async submitForScoring() {
++      if (!this.audioBlob) { this.error = 'Record an attempt first.'; return; }
++      this.error = null;
++      this.state = 'submitting';
++
++      // 1) Upload the mp3 to ADAPT (axios carries the app's auth like every other API call).
++      let uploadData = null;
++      try {
++        const form = new FormData();
++        form.append('audio', this.audioBlob, 'attempt.mp3');
++        const upload = await axios.post(this.audioUploadUrl, form);
++        uploadData = upload && upload.data;
++      } catch (e) {
++        this.error = 'Upload failed; please try again.';
++        this.state = 'recorded';
++        return;
++      }
+       const audioUrl = uploadData && uploadData.submission_file_url;
+       if (!audioUrl) {
+-        this.error = 'Audio upload failed; please try again.';
++        this.error = 'Upload failed; please try again.';
++        this.state = 'recorded';
+         return;
+       }
+-      this.submitting = true;
++
++      // 2) Score + gradeback.
++      await this.scoreAudio(audioUrl, uploadData);
++    },
++
++    async scoreAudio(audioUrl, uploadData) {
++      // uploadData carries submission_file_url + date_submitted; the gradeback response from
++      // /api/jwt/process-answer-jwt carries {type, message, completed_all_assignment_questions}
++      // (see Submission::store). The parent's submittedPronunciation handler uses upload.* for the
++      // file fields and response.* for the modal/type/completion fields.
+       try {
+         const r = await fetch(this.serviceUrl + '/score', {
+           method: 'POST',
+@@ -87,34 +285,87 @@ export default {
+         if (!r.ok) throw new Error('scoring service error');
+         const data = await r.json();
+         this.feedback = data.feedback;
+-        // Post the signed answerJWT to the gradebook (mirrors WeBWorK). The
+-        // gradebook trusts only this signed token; the inline feedback is display-only.
++        // Post the signed answerJWT to the gradebook (mirrors WeBWorK). The gradebook trusts
++        // only this signed token; the inline feedback is display-only.
+         const gradeback = await fetch(this.answerPostUrl, {
+           method: 'POST',
+           headers: { 'Content-Type': 'application/jwt' },
+           body: data.answerJWT,
+         });
+         const gradebackJson = await gradeback.json();
+-        // Emit both responses so the parent's submittedPronunciation handler
+-        // (mirrors submittedAudioUpload at questions.view.vue:4659) can use the
+-        // upload's file fields + the gradeback's modal/completion fields.
+         this.$emit('scored', { response: gradebackJson, upload: uploadData });
+-        if (this.$refs.recorder && this.$refs.recorder.removeRecord) {
+-          this.$refs.recorder.removeRecord();
+-        }
+       } catch (e) {
+-        // Display-only fallback; the gradebook still awards completion credit via
+-        // the service's completion answerJWT (status flag). If even that failed, the
+-        // attempt audio is already in S3 and an instructor can resolve it.
++        // Display-only fallback; the gradebook still awards completion credit via the service's
++        // completion answerJWT. If even that failed, the audio is in S3 for an instructor to resolve.
+         this.feedback = { status: 'unscoreable', weak_tags: [] };
+         this.error = 'Could not score your attempt; you will get completion credit.';
+-      } finally {
+-        this.submitting = false;
+       }
+     },
+-    onFailed() {
+-      this.error = 'Recording upload failed; please try again.';
+-    },
++  },
++  beforeDestroy() {
++    this._teardownAudio();
++    if (this.audioUrl) URL.revokeObjectURL(this.audioUrl);
+   },
+ };
+-</script>
+\ No newline at end of file
++</script>
++
++<style scoped>
++.pron-recorder {
++  max-width: 420px;
++  margin: 0 auto;
++  padding: 16px;
++  background: #f7f8fa;
++  border: 1px solid #e6e8ec;
++  border-radius: 12px;
++}
++.pron-mic {
++  display: inline-flex;
++  align-items: center;
++  gap: 8px;
++}
++.pron-mic-dot {
++  width: 10px;
++  height: 10px;
++  border-radius: 50%;
++  background: #fff;
++  display: inline-block;
++}
++.pron-live {
++  font-weight: 600;
++  color: #c0392b;
++}
++.pron-rec-dot {
++  display: inline-block;
++  width: 10px;
++  height: 10px;
++  border-radius: 50%;
++  background: #e74c3c;
++  margin-right: 6px;
++  animation: pron-pulse 1s ease-in-out infinite;
++}
++@keyframes pron-pulse {
++  0%, 100% { opacity: 1; }
++  50% { opacity: 0.25; }
++}
++.pron-meter {
++  height: 8px;
++  background: #e6e6e6;
++  border-radius: 5px;
++  overflow: hidden;
++  margin: 10px auto 0;
++  max-width: 260px;
++}
++.pron-meter-fill {
++  height: 100%;
++  background: #16a085;
++  transition: width 0.1s linear;
++}
++.pron-audio {
++  width: 100%;
++  max-width: 320px;
++  height: 40px;
++}
++.pron-hint {
++  margin-bottom: 0;
++}
++</style>
+-- 
+2.41.0
+

@@ -1,0 +1,85 @@
+From 4d2c2eb469068590321a323f33ac5694cd71dca1 Mon Sep 17 00:00:00 2001
+From: johnnylibretexts <264531926+johnnylibretexts@users.noreply.github.com>
+Date: Sun, 5 Jul 2026 20:46:20 -0700
+Subject: [PATCH 2/8] fix(import): assessment_type uses real time/delayed, not
+ varchar(1) codes
+
+Task 10 review found assessment_type='r' is runtime-defective: column is
+varchar(15) (2020_12_18_182538), runtime compares against 'real time'/
+'delayed'/'learning tree'. Mirrors SeedDemo::assignmentSpec.
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+---
+ .../LibreTexts/ImportLanguagePack.php         | 22 +++++++++++--------
+ tests/Feature/ImportLanguagePackTest.php      |  2 ++
+ 2 files changed, 15 insertions(+), 9 deletions(-)
+
+diff --git a/app/Console/Commands/LibreTexts/ImportLanguagePack.php b/app/Console/Commands/LibreTexts/ImportLanguagePack.php
+index 3420f5ce..3e5fdb06 100644
+--- a/app/Console/Commands/LibreTexts/ImportLanguagePack.php
++++ b/app/Console/Commands/LibreTexts/ImportLanguagePack.php
+@@ -26,8 +26,10 @@ use Illuminate\Support\Facades\File;
+  * Column names verified against SeedDemo::ensureCourse/ensureAssignment and
+  * the live migrations (see the brief's Step 4 note): courses.name (not
+  * course_name), courses.alpha is boolean, assignments has no user_id column,
+- * assessment_type is varchar(1) (r/d/l), and the folder table is
+- * saved_questions_folders (user_id/name/type) — there is no `folders` table.
++ * assessment_type is varchar(15) with values 'real time'/'delayed'/'learning
++ * tree' (per migration 2020_12_18_182538 + SeedDemo::assignmentSpec), and the
++ * folder table is saved_questions_folders (user_id/name/type) — there is no
++ * `folders` table.
+  *
+  * Hybrid grading: questions.pronunciation_data.grading stores the DRILL's
+  * grading ('completion' by default). The per-exam 'score' override declared
+@@ -97,7 +99,7 @@ class ImportLanguagePack extends Command
+                 // NOT mutated onto the shared question row (preserves hybrid grading
+                 // — a question used in a lesson keeps its drill-default grading).
+                 if (!empty($unit['exam'])) {
+-                    $exam = $this->ensureAssignment($course->id, $userId, $group->id, $unit['exam']['title']);
++                    $exam = $this->ensureAssignment($course->id, $userId, $group->id, $unit['exam']['title'], true);
+                     $order = 1;
+                     foreach ($unit['exam']['questions'] as $eq) {
+                         $question = Question::where('technology_id', $eq['exercise_id'])->first();
+@@ -177,18 +179,20 @@ class ImportLanguagePack extends Command
+     /**
+      * Ensure an assignment. The `assignments` table has NO user_id column
+      * (ownership flows via courses.user_id) — see SeedDemo::ensureAssignment
+-     * (lines 374-416) which never sets user_id. assessment_type is varchar(1)
+-     * with values r/d/l (not the string 'homework'). The full field set mirrors
+-     * SeedDemo so the save satisfies NOT NULL constraints (e.g. scoring_type,
+-     * late_policy). scoring_type='p' so per-question grading/points apply.
++     * (lines 374-416) which never sets user_id. assessment_type is varchar(15)
++     * with values 'real time'/'delayed'/'learning tree' (per migration
++     * 2020_12_18_182538 + SeedDemo::assignmentSpec — homework/quiz='real time',
++     * exam='delayed'). The full field set mirrors SeedDemo so the save
++     * satisfies NOT NULL constraints (e.g. scoring_type, late_policy).
++     * scoring_type='p' so per-question grading/points apply.
+      */
+-    private function ensureAssignment(int $courseId, int $userId, int $groupId, string $name): Assignment
++    private function ensureAssignment(int $courseId, int $userId, int $groupId, string $name, bool $isExam = false): Assignment
+     {
+         $assignment = Assignment::firstOrNew(['course_id' => $courseId, 'name' => $name]);
+         $now = Carbon::now();
+         $assignment->public_description = 'Imported from offline language pack.';
+         $assignment->formative = 0;
+-        $assignment->assessment_type = 'r';   // real time (varchar(1))
++        $assignment->assessment_type = $isExam ? 'delayed' : 'real time';   // varchar(15): real time/delayed/learning tree (mirrors SeedDemo::assignmentSpec)
+         $assignment->assignment_group_id = $groupId;
+         $assignment->source = 'a';
+         $assignment->instructions = 'Complete the pronunciation drills and comprehension items from the language pack.';
+diff --git a/tests/Feature/ImportLanguagePackTest.php b/tests/Feature/ImportLanguagePackTest.php
+index d90f600f..be3e0d12 100644
+--- a/tests/Feature/ImportLanguagePackTest.php
++++ b/tests/Feature/ImportLanguagePackTest.php
+@@ -77,6 +77,8 @@ class ImportLanguagePackTest extends TestCase
+         $this->assertNotNull($lessonAssignment);
+         $exam = Assignment::where('course_id', $course->id)->where('name', 'Examen U1')->first();
+         $this->assertNotNull($exam);
++        $this->assertEquals('real time', $lessonAssignment->assessment_type);
++        $this->assertEquals('delayed', $exam->assessment_type);
+ 
+         $pronQ = Question::where('technology', 'pronunciation')
+             ->where('technology_id', 'es-u1-l1-e1')->first();
+-- 
+2.41.0
+

@@ -1,0 +1,84 @@
+From ee9478b0b418d222c17a15a004a36cec43858dfd Mon Sep 17 00:00:00 2001
+From: johnnylibretexts <264531926+johnnylibretexts@users.noreply.github.com>
+Date: Tue, 7 Jul 2026 01:48:13 -0700
+Subject: [PATCH 8/8] feat(pronunciation): learner-friendly phoneme chip labels
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Show familiar letters/digraphs on the per-sound chips instead of raw IPA:
+ɾ→"r" (tooltip "tapped r"), r→"rr" ("rolled r / trill"), β→"b" ("soft b/v"),
+ɣ→"g" ("soft g"), tʃ→"ch", ʝ→"y", etc. Tooltip carries the sound nuance +
+score ±band. Language-aware for the French ou/u split (u→"ou", y→"u"). Falls
+back to the raw symbol for anything unmapped.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01CRePd9rbvtz6UqFuuYMi9U
+---
+ .../questions/PronunciationQuestion.vue       | 34 ++++++++++++++++---
+ 1 file changed, 30 insertions(+), 4 deletions(-)
+
+diff --git a/resources/js/components/questions/PronunciationQuestion.vue b/resources/js/components/questions/PronunciationQuestion.vue
+index 10df4a80..ff5179cc 100644
+--- a/resources/js/components/questions/PronunciationQuestion.vue
++++ b/resources/js/components/questions/PronunciationQuestion.vue
+@@ -52,7 +52,7 @@
+         <div class="pron-chips">
+           <span v-for="(ps, i) in feedback.phoneme_scores" :key="i"
+                 class="pron-chip" :class="'pron-chip--' + chipBand(ps)" :title="chipTitle(ps)">
+-            <span class="pron-chip-sym">{{ ps.phoneme }}</span>
++            <span class="pron-chip-sym">{{ friendlyLabel(ps.phoneme) }}</span>
+             <span class="pron-chip-score">{{ chipScoreLabel(ps) }}</span>
+           </span>
+         </div>
+@@ -88,6 +88,25 @@ const SILENCE_RMS = 0.018   // energy below this counts as silence
+ const MP3_KBPS = 128
+ const MIN_AUDIO_BYTES = 4000 // an empty/silent take encodes tiny; reject below this
+ 
++// Learner-friendly labels for the engine's IPA phonemes: [chip label, tooltip
++// description]. Beginners see the letter/digraph they know (with the sound nuance
++// in the tooltip) instead of raw IPA. Fallback = the raw symbol.
++const PHONEME_LABELS = {
++  a: ['a', 'a'], b: ['b', 'b'], d: ['d', 'd'], e: ['e', 'e'], i: ['i', 'i'],
++  j: ['y', 'y-glide (like bien)'], k: ['k', 'hard c / k'], l: ['l', 'l'],
++  m: ['m', 'm'], n: ['n', 'n'], o: ['o', 'o'], p: ['p', 'p'],
++  r: ['rr', 'rolled r (trill)'], s: ['s', 's'], t: ['t', 't'],
++  'tʃ': ['ch', 'ch'], u: ['u', 'u'], w: ['w', 'w-glide (like agua)'],
++  'ð': ['d', 'soft d (between vowels)'], 'ɡ': ['g', 'hard g'],
++  'ɣ': ['g', 'soft g (between vowels)'], 'ɾ': ['r', 'tapped r (single flap)'],
++  'ʝ': ['y', 'y / ll sound'], 'β': ['b', 'soft b / v (between vowels)'],
++  y: ['u', 'rounded u (like tu)'], 'aː': ['a', 'long a'],
++}
++// Same IPA symbol, different spelling by language (French ou vs Spanish u).
++const PHONEME_LABELS_FR = {
++  u: ['ou', 'ou (like tout)'],
++}
++
+ export default {
+   name: 'PronunciationQuestion',
+   props: {
+@@ -234,11 +253,18 @@ export default {
+     chipScoreLabel(ps) {
+       return this.chipSuppressed(ps) ? '–' : Math.round(ps.score);
+     },
++    phonemeInfo(sym) {
++      const fr = this.language === 'fr' ? PHONEME_LABELS_FR[sym] : null;
++      return fr || PHONEME_LABELS[sym] || [sym, sym];
++    },
++    friendlyLabel(sym) {
++      return this.phonemeInfo(sym)[0];
++    },
+     chipTitle(ps) {
+-      if (this.chipSuppressed(ps)) return 'not judged confidently';
++      const desc = this.phonemeInfo(ps.phoneme)[1];
++      if (this.chipSuppressed(ps)) return desc + ' — not judged confidently';
+       const band = ps.band != null ? ' ±' + Math.round(ps.band) : '';
+-      const tag = ps.tag ? ' · ' + String(ps.tag).replace(/_/g, ' ') : '';
+-      return Math.round(ps.score) + band + tag;
++      return desc + ' — ' + Math.round(ps.score) + band;
+     },
+ 
+     _teardownAudio() {
+-- 
+2.41.0
+

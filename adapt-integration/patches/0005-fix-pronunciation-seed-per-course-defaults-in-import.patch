@@ -1,0 +1,127 @@
+From fbbdb1035b99cc8d5663d23e198e68bcbe88c312 Mon Sep 17 00:00:00 2001
+From: johnnylibretexts <264531926+johnnylibretexts@users.noreply.github.com>
+Date: Mon, 6 Jul 2026 22:16:27 -0700
+Subject: [PATCH 5/8] fix(pronunciation): seed per-course defaults in
+ import-language-pack
+
+Imported language courses (Spanish 1, French 1) were created without the
+defaults ADAPT's normal course-creation path (CourseController::prepareNewCourse)
+sets up, which made the STUDENT scores endpoint 500:
+- no final_grades row -> ScoreController::getCourseScoresByUser dereferenced
+  $course->finalGrades->letter_grades_released on null;
+- no assignment_group_weights rows -> getAssignmentGroupWeights built an empty
+  assignment->group map, causing an undefined-key fatal in
+  Score::getScoresByUserIdAndAssignment.
+
+ImportLanguagePack now mirrors SeedDemo's helpers: ensureFinalGrades +
+ensureSection + ensureDemoEnrollments per course, and ensureAssignmentWeight per
+assignment group. A fresh re-seed of a clean DB no longer reintroduces the 500s,
+and imported language courses are demo-ready (section + enrolled demo students).
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01CRePd9rbvtz6UqFuuYMi9U
+---
+ .../LibreTexts/ImportLanguagePack.php         | 71 +++++++++++++++++++
+ 1 file changed, 71 insertions(+)
+
+diff --git a/app/Console/Commands/LibreTexts/ImportLanguagePack.php b/app/Console/Commands/LibreTexts/ImportLanguagePack.php
+index 3e5fdb06..0609b553 100644
+--- a/app/Console/Commands/LibreTexts/ImportLanguagePack.php
++++ b/app/Console/Commands/LibreTexts/ImportLanguagePack.php
+@@ -6,6 +6,7 @@ use App\Assignment;
+ use App\AssignmentGroup;
+ use App\Course;
+ use App\Question;
++use App\Section;
+ use App\Console\Commands\LibreTexts\SeedDemo;   // for buildQtiJson()
+ use Illuminate\Console\Command;
+ use Illuminate\Support\Carbon;
+@@ -76,8 +77,23 @@ class ImportLanguagePack extends Command
+             $course = $this->ensureCourse($pack, $userId);
+             $folderId = $this->ensureFolder($course, $userId);
+ 
++            // Per-course defaults that ADAPT's normal course-creation path
++            // (CourseController::prepareNewCourse) sets up but which this command
++            // otherwise skips. Without them the STUDENT scores endpoint 500s:
++            //   - final_grades: ScoreController::getCourseScoresByUser reads
++            //     $course->finalGrades->letter_grades_released (null -> fatal);
++            //   - assignment_group_weights (below, per group): getAssignmentGroupWeights
++            //     joins on it to build the assignment->group map; an empty map -> an
++            //     undefined-key fatal in Score::getScoresByUserIdAndAssignment.
++            // Section + enrollments make the course demo-ready for the seeded students.
++            $this->ensureFinalGrades($course->id);
++            $section = $this->ensureSection($course->id);
++            $this->ensureDemoEnrollments($course->id, $section->id);
++
+             foreach ($pack['units'] as $unit) {
+                 $group = $this->ensureAssignmentGroup($course->id, $userId, $unit['title']);
++                // Every assignment group needs a weight row or the scores endpoint 500s (see above).
++                $this->ensureAssignmentWeight($group->id, $course->id);
+                 foreach ($unit['lessons'] as $lesson) {
+                     $assignment = $this->ensureAssignment(
+                         $course->id, $userId, $group->id,
+@@ -176,6 +192,61 @@ class ImportLanguagePack extends Command
+         return $group;
+     }
+ 
++    private function ensureFinalGrades(int $courseId): void
++    {
++        // Mirrors SeedDemo::ensureFinalGrades (lines 246-258).
++        DB::table('final_grades')->updateOrInsert(
++            ['course_id' => $courseId],
++            [
++                'letter_grades' => '90,A,80,B,70,C,60,D,0,F',
++                'round_scores' => 0,
++                'letter_grades_released' => 0,
++                'updated_at' => Carbon::now(),
++                'created_at' => Carbon::now(),
++            ]
++        );
++    }
++
++    private function ensureSection(int $courseId): Section
++    {
++        // Mirrors SeedDemo::ensureSection (lines 260-267).
++        $section = Section::firstOrNew(['course_id' => $courseId, 'name' => 'Sandbox Section']);
++        $section->crn = 'DEV-' . $courseId;
++        $section->access_code = 'sandbox-' . $courseId;
++        $section->save();
++        return $section;
++    }
++
++    private function ensureDemoEnrollments(int $courseId, int $sectionId): void
++    {
++        // Enroll the same demo students SeedDemo creates (real + fake), if present,
++        // so an imported language course is immediately demo-ready for a student login.
++        foreach (['student@libretexts.dev', 'fake.student@libretexts.dev'] as $email) {
++            $student = \App\User::where('email', $email)->first();
++            if ($student) {
++                $this->ensureEnrollment($courseId, $sectionId, (int) $student->id);
++            }
++        }
++    }
++
++    private function ensureEnrollment(int $courseId, int $sectionId, int $userId): void
++    {
++        // Mirrors SeedDemo::ensureEnrollment (lines 269-275).
++        DB::table('enrollments')->updateOrInsert(
++            ['course_id' => $courseId, 'section_id' => $sectionId, 'user_id' => $userId],
++            ['updated_at' => Carbon::now(), 'created_at' => Carbon::now()]
++        );
++    }
++
++    private function ensureAssignmentWeight(int $assignmentGroupId, int $courseId): void
++    {
++        // Mirrors SeedDemo::ensureAssignmentWeight (lines 442-448).
++        DB::table('assignment_group_weights')->updateOrInsert(
++            ['assignment_group_id' => $assignmentGroupId, 'course_id' => $courseId],
++            ['assignment_group_weight' => 100, 'updated_at' => Carbon::now(), 'created_at' => Carbon::now()]
++        );
++    }
++
+     /**
+      * Ensure an assignment. The `assignments` table has NO user_id column
+      * (ownership flows via courses.user_id) — see SeedDemo::ensureAssignment
+-- 
+2.41.0
+

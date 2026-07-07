@@ -1,0 +1,116 @@
+From 4fc702f57ebe32d7e32d72ef1ac26a974d78c4cd Mon Sep 17 00:00:00 2001
+From: johnnylibretexts <264531926+johnnylibretexts@users.noreply.github.com>
+Date: Tue, 7 Jul 2026 01:05:51 -0700
+Subject: [PATCH 7/8] feat(pronunciation): show per-phoneme score breakdown
+ (chips)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+After a scored attempt, render the engine's per-sound scores as colored chips
+(symbol + number) below the overall score, mirroring johnny-lingo-v2's bands:
+>=75 good (green), >=60 ok (yellow), else bad (red); grey when the model isn't
+confident on that sound (reliable=false / abstain). Tooltip shows the score +
+uncertainty band + tag.
+
+Requires the pron service to include phoneme_scores in the /score feedback
+(added there separately — the signed answerJWT stays minimal; phoneme_scores are
+display-only). Lets a learner see e.g. that the tap ɾ in "libro" scored low
+instead of guessing from just the overall number.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01CRePd9rbvtz6UqFuuYMi9U
+---
+ .../questions/PronunciationQuestion.vue       | 64 ++++++++++++++++++-
+ 1 file changed, 63 insertions(+), 1 deletion(-)
+
+diff --git a/resources/js/components/questions/PronunciationQuestion.vue b/resources/js/components/questions/PronunciationQuestion.vue
+index 409f7b80..10df4a80 100644
+--- a/resources/js/components/questions/PronunciationQuestion.vue
++++ b/resources/js/components/questions/PronunciationQuestion.vue
+@@ -46,7 +46,21 @@
+       <p v-if="feedback.status === 'scored'" class="pron-score">
+         Provisional score: {{ Math.round(feedback.overall) }}/100
+       </p>
+-      <p v-else class="pron-neutral">
++      <div v-if="feedback.status === 'scored' && feedback.phoneme_scores && feedback.phoneme_scores.length"
++           class="pron-phonemes mt-2">
++        <div class="pron-phonemes-head small text-muted">Per-sound breakdown</div>
++        <div class="pron-chips">
++          <span v-for="(ps, i) in feedback.phoneme_scores" :key="i"
++                class="pron-chip" :class="'pron-chip--' + chipBand(ps)" :title="chipTitle(ps)">
++            <span class="pron-chip-sym">{{ ps.phoneme }}</span>
++            <span class="pron-chip-score">{{ chipScoreLabel(ps) }}</span>
++          </span>
++        </div>
++        <div class="pron-phonemes-legend small text-muted mt-1">
++          Each box is a speech sound in the word; the number is how close yours was. Grey = not judged confidently.
++        </div>
++      </div>
++      <p v-else-if="feedback.status !== 'scored'" class="pron-neutral">
+         Couldn't reliably score this attempt — you'll get full completion credit for trying.
+       </p>
+       <p v-if="feedback.weak_tags && feedback.weak_tags.length" class="pron-weak">
+@@ -206,6 +220,27 @@ export default {
+       this.state = 'idle';
+     },
+ 
++    // Per-phoneme chip helpers (mirror johnny-lingo-v2 bands: >=75 good, >=60 ok,
++    // else bad; suppressed when the model isn't confident on that sound).
++    chipSuppressed(ps) {
++      return !ps || ps.reliable === false || ps.abstain === true || ps.score == null;
++    },
++    chipBand(ps) {
++      if (this.chipSuppressed(ps)) return 'na';
++      if (ps.score >= 75) return 'good';
++      if (ps.score >= 60) return 'ok';
++      return 'bad';
++    },
++    chipScoreLabel(ps) {
++      return this.chipSuppressed(ps) ? '–' : Math.round(ps.score);
++    },
++    chipTitle(ps) {
++      if (this.chipSuppressed(ps)) return 'not judged confidently';
++      const band = ps.band != null ? ' ±' + Math.round(ps.band) : '';
++      const tag = ps.tag ? ' · ' + String(ps.tag).replace(/_/g, ' ') : '';
++      return Math.round(ps.score) + band + tag;
++    },
++
+     _teardownAudio() {
+       if (this._elapsedTimer) { clearInterval(this._elapsedTimer); this._elapsedTimer = null; }
+       if (this._processor) { try { this._processor.disconnect(); this._processor.onaudioprocess = null; } catch (e) {} }
+@@ -368,4 +403,31 @@ export default {
+ .pron-hint {
+   margin-bottom: 0;
+ }
++.pron-chips {
++  display: flex;
++  flex-wrap: wrap;
++  gap: 6px;
++}
++.pron-chip {
++  display: inline-flex;
++  flex-direction: column;
++  align-items: center;
++  min-width: 34px;
++  padding: 3px 7px;
++  border-radius: 8px;
++  border: 1px solid transparent;
++  line-height: 1.15;
++}
++.pron-chip-sym {
++  font-size: 15px;
++  font-weight: 600;
++}
++.pron-chip-score {
++  font-size: 10px;
++  opacity: 0.85;
++}
++.pron-chip--good { background: #eaf8f1; border-color: #b8e6cf; color: #167c4a; }
++.pron-chip--ok   { background: #fff8e0; border-color: #f2dd97; color: #8a6d10; }
++.pron-chip--bad  { background: #fff1f1; border-color: #f3b9b9; color: #b42318; }
++.pron-chip--na   { background: #f2f4f7; border-color: #e4e7ec; color: #98a2b3; }
+ </style>
+-- 
+2.41.0
+

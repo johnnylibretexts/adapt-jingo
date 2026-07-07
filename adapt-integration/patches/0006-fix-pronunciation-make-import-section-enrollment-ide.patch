@@ -1,0 +1,72 @@
+From c0482341f4f4af23a84a41cf46e9eeb87aa2beb0 Mon Sep 17 00:00:00 2001
+From: johnnylibretexts <264531926+johnnylibretexts@users.noreply.github.com>
+Date: Mon, 6 Jul 2026 22:34:00 -0700
+Subject: [PATCH 6/8] fix(pronunciation): make import section/enrollment
+ idempotent vs existing data
+
+Re-importing a language pack over a course that already had a section (or a
+student already enrolled via a different section) failed:
+- ensureSection matched on (course_id, name='Sandbox Section') and created a
+  SECOND section when the course already had one under another name;
+- ensureEnrollment matched on (course_id, section_id, user_id) but the
+  enrollments unique key is (user_id, course_id), so an existing enrollment via
+  another section produced a duplicate-key violation.
+
+ensureSection now reuses the course's existing section if present; ensureEnrollment
+matches the real (user_id, course_id) unique key and updates section_id in place.
+Re-imports over an existing/dirty DB now succeed without duplicate sections or
+enrollment conflicts.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01CRePd9rbvtz6UqFuuYMi9U
+---
+ .../LibreTexts/ImportLanguagePack.php         | 25 +++++++++++++------
+ 1 file changed, 17 insertions(+), 8 deletions(-)
+
+diff --git a/app/Console/Commands/LibreTexts/ImportLanguagePack.php b/app/Console/Commands/LibreTexts/ImportLanguagePack.php
+index 0609b553..41896c8f 100644
+--- a/app/Console/Commands/LibreTexts/ImportLanguagePack.php
++++ b/app/Console/Commands/LibreTexts/ImportLanguagePack.php
+@@ -209,11 +209,18 @@ class ImportLanguagePack extends Command
+ 
+     private function ensureSection(int $courseId): Section
+     {
+-        // Mirrors SeedDemo::ensureSection (lines 260-267).
+-        $section = Section::firstOrNew(['course_id' => $courseId, 'name' => 'Sandbox Section']);
+-        $section->crn = 'DEV-' . $courseId;
+-        $section->access_code = 'sandbox-' . $courseId;
+-        $section->save();
++        // Reuse the course's existing section if it already has one (an imported
++        // course may have been given a section elsewhere) — only create otherwise.
++        // Avoids duplicate sections on re-import and keeps enrollments consistent.
++        $section = Section::where('course_id', $courseId)->first();
++        if (!$section) {
++            $section = new Section();
++            $section->name = 'Sandbox Section';
++            $section->course_id = $courseId;
++            $section->crn = 'DEV-' . $courseId;
++            $section->access_code = 'sandbox-' . $courseId;
++            $section->save();
++        }
+         return $section;
+     }
+ 
+@@ -231,10 +238,12 @@ class ImportLanguagePack extends Command
+ 
+     private function ensureEnrollment(int $courseId, int $sectionId, int $userId): void
+     {
+-        // Mirrors SeedDemo::ensureEnrollment (lines 269-275).
++        // The enrollments unique key is (user_id, course_id) — match on that so a
++        // student already enrolled (possibly via another section) updates in place
++        // instead of hitting a duplicate-key error. section_id is set/updated.
+         DB::table('enrollments')->updateOrInsert(
+-            ['course_id' => $courseId, 'section_id' => $sectionId, 'user_id' => $userId],
+-            ['updated_at' => Carbon::now(), 'created_at' => Carbon::now()]
++            ['course_id' => $courseId, 'user_id' => $userId],
++            ['section_id' => $sectionId, 'updated_at' => Carbon::now(), 'created_at' => Carbon::now()]
+         );
+     }
+ 
+-- 
+2.41.0
+

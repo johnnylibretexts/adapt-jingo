@@ -1,0 +1,39 @@
+From d65742d1dc14c1771f2864214920b7867f778acf Mon Sep 17 00:00:00 2001
+From: johnnylibretexts <264531926+johnnylibretexts@users.noreply.github.com>
+Date: Sun, 5 Jul 2026 20:54:33 -0700
+Subject: [PATCH 3/8] fix(db): restore questions.technology to VARCHAR(15) in
+ migration down()
+
+down() was restoring ENUM(5) -- not the original VARCHAR(15) (per migration
+2020_09_10_141644). up() converts VARCHAR(15)->ENUM(6); down() now faithfully
+reverses that, restoring VARCHAR(15).
+
+Adjudicated as plan-mandated Task-6 finding (Option A: faithful reversal).
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+---
+ .../2026_07_05_000001_add_pronunciation_to_questions.php     | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/database/migrations/2026_07_05_000001_add_pronunciation_to_questions.php b/database/migrations/2026_07_05_000001_add_pronunciation_to_questions.php
+index b3a2fcf4..dd49d20a 100644
+--- a/database/migrations/2026_07_05_000001_add_pronunciation_to_questions.php
++++ b/database/migrations/2026_07_05_000001_add_pronunciation_to_questions.php
+@@ -25,9 +25,12 @@ class AddPronunciationToQuestions extends Migration
+         Schema::table('questions', function (\Illuminate\Database\Schema\Blueprint $table) {
+             $table->dropColumn('pronunciation_data');
+         });
++        // Restore the pre-migration type (VARCHAR(15) per
++        // migration 2020_09_10_141644). up() locked it to
++        // ENUM(6); rollback undoes that lockdown.
+         DB::statement(
+             "ALTER TABLE questions CHANGE technology technology "
+-            . "ENUM('h5p','webwork','imathas','qti','text') DEFAULT NULL"
++            . "VARCHAR(15) DEFAULT NULL"
+         );
+     }
+ }
+\ No newline at end of file
+-- 
+2.41.0
+
