@@ -6,5 +6,5 @@ import os
 MODEL_DIR = os.environ["JINGO_ENGINE_MODEL_DIR"]
 RECORDS_DIR = os.environ.get("JINGO_RECORDS_DIR", "/opt/libretexts/jingo/records")
 JWT_SECRET = os.environ["WEBWORK_JWT_SECRET"]  # shared with ADAPT webwork gradeback
-ALLOWED_ORIGIN = os.environ.get("JINGO_ALLOWED_ORIGIN", "https://adapt.libretexts.dev")
+ALLOWED_ORIGIN = os.environ.get("JINGO_ALLOWED_ORIGIN", "https://adapt.example.org")
 MAX_AUDIO_SECONDS = float(os.environ.get("JINGO_ENGINE_MAX_AUDIO_SECONDS", "20"))

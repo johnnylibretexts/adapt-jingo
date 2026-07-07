@@ -20,7 +20,7 @@ next to a `.env` file providing `WEBWORK_JWT_SECRET` (never commit that file).
 - `JINGO_ENGINE_MODEL_DIR` — path to the CT2 wav2vec2-xlsr-53-espeak-ct2 model dir (required)
 - `WEBWORK_JWT_SECRET` — shared with ADAPT webwork gradeback (required; read from ADAPT .env)
 - `JINGO_RECORDS_DIR` — per-exercise JSON records + tag_map (default /opt/libretexts/jingo/records)
-- `JINGO_ALLOWED_ORIGIN` — CORS origin allowed to call /score (default https://adapt.libretexts.dev)
+- `JINGO_ALLOWED_ORIGIN` — CORS origin allowed to call /score (default https://adapt.example.org)
 
 ## Docker network
 

@@ -14,7 +14,7 @@ kept out of the shipped engine and out of the box entirely — it only ever
 runs here, offline, by whoever is authoring a pack. The output (a JSON pack
 of plain phoneme strings and integer ids) carries no GPL encumbrance.
 
-Do not attempt to run these scripts on the Hostinger box; there is no G2P
+Do not attempt to run these scripts on a production/deployment server; there is no G2P
 toolchain there and there shouldn't be.
 
 ## Environment setup
