@@ -1,0 +1,111 @@
+From aee77150f74046c8243fdf510fbd9955cd681bd7 Mon Sep 17 00:00:00 2001
+From: johnnylibretexts <264531926+johnnylibretexts@users.noreply.github.com>
+Date: Wed, 8 Jul 2026 04:03:06 +0000
+Subject: [PATCH] feat(pronunciation): instructor preview of the recorder
+ (mic/scoring disabled)
+
+Instructors (role 2) saw a blank body for pronunciation questions in the
+View Assessments page because <pronunciation-question> was gated to students
+(role 3) only. Add a `preview` prop to PronunciationQuestion.vue that disables
+the Record button and early-returns from startRecording()/submitForScoring(),
+and render the recorder for instructors with :preview="user.role === 2" plus a
+preview banner. The mic is only requested on the Record click, so preview never
+calls getUserMedia or submits an attempt.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01CRePd9rbvtz6UqFuuYMi9U
+---
+ .../questions/PronunciationQuestion.vue          | 10 ++++++++--
+ resources/js/pages/questions.view.vue            | 16 ++++++++++++----
+ 2 files changed, 20 insertions(+), 6 deletions(-)
+
+diff --git a/resources/js/components/questions/PronunciationQuestion.vue b/resources/js/components/questions/PronunciationQuestion.vue
+index ff5179cc..daedc9ac 100644
+--- a/resources/js/components/questions/PronunciationQuestion.vue
++++ b/resources/js/components/questions/PronunciationQuestion.vue
+@@ -9,10 +9,13 @@
+     <div v-if="!feedback" class="pron-recorder">
+       <!-- IDLE -->
+       <div v-if="state === 'idle'" class="pron-stage text-center">
+-        <button type="button" class="btn btn-primary pron-mic" @click="startRecording">
++        <button type="button" class="btn btn-primary pron-mic" :disabled="preview" @click="startRecording">
+           <span class="pron-mic-dot"></span> Record
+         </button>
+-        <p class="pron-hint small text-muted mt-2">
++        <p v-if="preview" class="pron-hint small text-muted mt-2">
++          Instructor preview — this is exactly what students see; recording is disabled here.
++        </p>
++        <p v-else class="pron-hint small text-muted mt-2">
+           Tap record and say the prompt aloud. Recording stops on its own when you finish.
+         </p>
+       </div>
+@@ -119,6 +122,7 @@ export default {
+     audioUploadUrl: { type: String, required: true },
+     serviceUrl: { type: String, required: true },
+     answerPostUrl: { type: String, default: '/api/jwt/process-answer-jwt' },
++    preview: { type: Boolean, default: false },
+   },
+   data() {
+     return {
+@@ -142,6 +146,7 @@ export default {
+   },
+   methods: {
+     async startRecording() {
++      if (this.preview) return;
+       this.error = null;
+       if (!navigator.mediaDevices || !window.AudioContext && !window.webkitAudioContext) {
+         this.error = 'Recording is not supported in this browser. Try desktop Chrome.';
+@@ -300,6 +305,7 @@ export default {
+     },
+ 
+     async submitForScoring() {
++      if (this.preview) return;
+       if (!this.audioBlob) { this.error = 'Record an attempt first.'; return; }
+       this.error = null;
+       this.state = 'submitting';
+diff --git a/resources/js/pages/questions.view.vue b/resources/js/pages/questions.view.vue
+index 39001a15..8d738b78 100644
+--- a/resources/js/pages/questions.view.vue
++++ b/resources/js/pages/questions.view.vue
+@@ -2165,18 +2165,25 @@
+                               No additional submissions will be accepted.
+                             </b-alert>
+                           </div>
++                          <div
++                            v-if="questions[currentPage-1].technology === 'pronunciation' && user.role === 2 && !isAnonymousUser"
++                            class="alert alert-secondary py-1 px-2 mb-1 small"
++                          >
++                            <strong>Instructor preview</strong> — the exact recorder students see; recording &amp; scoring are disabled here.
++                          </div>
+                           <pronunciation-question
+                             v-if="questions[currentPage-1].technology === 'pronunciation'
+-                                  && user.role === 3 && !isAnonymousUser"
++                                  && (user.role === 3 || user.role === 2) && !isAnonymousUser"
+                             :key="questions[currentPage-1].id"
+                             :question-id="questions[currentPage-1].id"
+                             :prompt="questions[currentPage-1].title"
+-                            :problem-jwt="questions[currentPage-1].pronunciation_problem_jwt"
++                            :problem-jwt="questions[currentPage-1].pronunciation_problem_jwt || ''"
+                             :exercise-id="(JSON.parse(questions[currentPage-1].pronunciation_data || '{}') || {}).exercise_id || ''"
+                             :language="(JSON.parse(questions[currentPage-1].pronunciation_data || '{}') || {}).language || ''"
+                             :grading="(JSON.parse(questions[currentPage-1].pronunciation_data || '{}') || {}).grading || 'completion'"
+                             :audio-upload-url="'/api/submission-audios/' + assignmentId + '/' + questions[currentPage-1].id"
+-                            :service-url="window.config.pronunciationServiceUrl"
++                            :service-url="pronunciationServiceUrl"
++                            :preview="user.role === 2"
+                             @scored="submittedPronunciation"
+                           />
+                         </div>
+@@ -3209,7 +3216,8 @@ export default {
+       user: 'auth/user'
+     }),
+     isMe: () => window.config.isMe,
+-    isLocalMe: () => window.config.isMe && window.location.hostname === 'local.adapt'
++    isLocalMe: () => window.config.isMe && window.location.hostname === 'local.adapt',
++    pronunciationServiceUrl: () => window.config.pronunciationServiceUrl
+   },
+   watch: {
+     openEndedSubmissionType: function (newVal, oldVal) {
+-- 
+2.43.0
+

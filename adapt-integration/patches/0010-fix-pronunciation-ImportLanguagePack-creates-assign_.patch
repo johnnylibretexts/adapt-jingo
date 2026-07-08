@@ -1,0 +1,75 @@
+From b0adeef4978cbe59127655a0439a730899786f83 Mon Sep 17 00:00:00 2001
+From: johnnylibretexts <264531926+johnnylibretexts@users.noreply.github.com>
+Date: Wed, 8 Jul 2026 07:35:23 +0000
+Subject: [PATCH] fix(pronunciation): ImportLanguagePack creates
+ assign_to_timings for every assignment
+
+Imported lesson/exam assignments were created without any assign_to_timings /
+assign_to_groups rows, so ADAPT's instructor Assignments view 500'd
+(array_values($assign_to_groups[$assignment->id]) -> Undefined offset in
+App\Assignment) and the whole language course's list was unusable. Add an
+idempotent ensureAssignmentTiming() (mirrors SeedDemo::ensureAssignmentTiming)
+and call it from ensureAssignment(). final_submission_deadline stays null, which
+is safe because these assignments use late_policy='not accepted'.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01CRePd9rbvtz6UqFuuYMi9U
+---
+ .../LibreTexts/ImportLanguagePack.php         | 38 +++++++++++++++++++
+ 1 file changed, 38 insertions(+)
+
+diff --git a/app/Console/Commands/LibreTexts/ImportLanguagePack.php b/app/Console/Commands/LibreTexts/ImportLanguagePack.php
+index 41896c8f..6decb093 100644
+--- a/app/Console/Commands/LibreTexts/ImportLanguagePack.php
++++ b/app/Console/Commands/LibreTexts/ImportLanguagePack.php
+@@ -302,9 +302,47 @@ class ImportLanguagePack extends Command
+         if (!$assignment->exists) {
+             $assignment->save();
+         }
++        // Every assignment needs an assign_to_timings row (+ an assign_to_groups
++        // 'course' row) or the instructor Assignments view 500s — Assignment.php
++        // does array_values($assign_to_groups[$assignment->id]) and throws
++        // "Undefined offset" for an assignment with no timing/group. Previously the
++        // import skipped this, leaving lesson assignments unschedulable and the whole
++        // course's Assignments list broken. Idempotent; mirrors SeedDemo.
++        $this->ensureAssignmentTiming((int) $assignment->id, $courseId, $now);
+         return $assignment;
+     }
+ 
++    /**
++     * Ensure the assign_to_timings (+ assign_to_groups 'course') rows for an
++     * assignment. Idempotent by assignment_id. Mirrors SeedDemo::ensureAssignmentTiming.
++     * final_submission_deadline stays null, which is safe here because every imported
++     * assignment uses late_policy='not accepted' (the null-deadline crash in
++     * Assignment.php:481 only fires when the policy is NOT 'not accepted').
++     */
++    private function ensureAssignmentTiming(int $assignmentId, int $courseId, Carbon $now): int
++    {
++        $timing = DB::table('assign_to_timings')->where('assignment_id', $assignmentId)->first();
++        $values = [
++            'assignment_id' => $assignmentId,
++            'available_from' => $now->copy()->subDay()->toDateTimeString(),
++            'due' => $now->copy()->addMonths(3)->toDateTimeString(),
++            'final_submission_deadline' => null,
++            'updated_at' => $now,
++        ];
++        if ($timing) {
++            DB::table('assign_to_timings')->where('id', $timing->id)->update($values);
++            $timingId = $timing->id;
++        } else {
++            $values['created_at'] = $now;
++            $timingId = DB::table('assign_to_timings')->insertGetId($values);
++        }
++        DB::table('assign_to_groups')->updateOrInsert(
++            ['assign_to_timing_id' => $timingId, 'group' => 'course', 'group_id' => $courseId],
++            ['updated_at' => $now, 'created_at' => $now]
++        );
++        return (int) $timingId;
++    }
++
+     /**
+      * Ensure a question for a drill. Mirrors SeedDemo::ensureQtiQuestion's field
+      * set (lines 558-599) for the common fields; the pronunciation branch adds
+-- 
+2.43.0
+

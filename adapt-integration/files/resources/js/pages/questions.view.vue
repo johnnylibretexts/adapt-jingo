@@ -2165,18 +2165,25 @@
                               No additional submissions will be accepted.
                             </b-alert>
                           </div>
+                          <div
+                            v-if="questions[currentPage-1].technology === 'pronunciation' && user.role === 2 && !isAnonymousUser"
+                            class="alert alert-secondary py-1 px-2 mb-1 small"
+                          >
+                            <strong>Instructor preview</strong> — the exact recorder students see; recording &amp; scoring are disabled here.
+                          </div>
                           <pronunciation-question
                             v-if="questions[currentPage-1].technology === 'pronunciation'
-                                  && user.role === 3 && !isAnonymousUser"
+                                  && (user.role === 3 || user.role === 2) && !isAnonymousUser"
                             :key="questions[currentPage-1].id"
                             :question-id="questions[currentPage-1].id"
                             :prompt="questions[currentPage-1].title"
-                            :problem-jwt="questions[currentPage-1].pronunciation_problem_jwt"
+                            :problem-jwt="questions[currentPage-1].pronunciation_problem_jwt || ''"
                             :exercise-id="(JSON.parse(questions[currentPage-1].pronunciation_data || '{}') || {}).exercise_id || ''"
                             :language="(JSON.parse(questions[currentPage-1].pronunciation_data || '{}') || {}).language || ''"
                             :grading="(JSON.parse(questions[currentPage-1].pronunciation_data || '{}') || {}).grading || 'completion'"
                             :audio-upload-url="'/api/submission-audios/' + assignmentId + '/' + questions[currentPage-1].id"
-                            :service-url="window.config.pronunciationServiceUrl"
+                            :service-url="pronunciationServiceUrl"
+                            :preview="user.role === 2"
                             @scored="submittedPronunciation"
                           />
                         </div>
@@ -3209,7 +3216,8 @@ export default {
       user: 'auth/user'
     }),
     isMe: () => window.config.isMe,
-    isLocalMe: () => window.config.isMe && window.location.hostname === 'local.adapt'
+    isLocalMe: () => window.config.isMe && window.location.hostname === 'local.adapt',
+    pronunciationServiceUrl: () => window.config.pronunciationServiceUrl
   },
   watch: {
     openEndedSubmissionType: function (newVal, oldVal) {

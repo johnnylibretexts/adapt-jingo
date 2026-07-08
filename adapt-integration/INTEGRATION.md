@@ -2,9 +2,9 @@
 
 This directory packages the ADAPT-side changes that wire ADAPT's pronunciation
 question type (`technology = 'pronunciation'`) to the jingo pronunciation
-scoring service. It is derived from 8 committed commits on `adapt-dev`
-(range `8e198153^..ee9478b0`), extracted from clean git objects — no
-working-tree edits are involved.
+scoring service. It is derived from 10 committed commits on `adapt-dev`
+(range `8e198153^..b0adeef4`, now merged to `main`), extracted from clean git
+objects — no working-tree edits are involved.
 
 **Note on naming:** `technology = 'pronunciation'`, `PronunciationQuestion.vue`,
 and related ADAPT-side identifiers intentionally keep the full word
@@ -16,15 +16,15 @@ migration beyond the one shipped here.
 
 | # | File (ADAPT-relative path) | What changed |
 |---|---|---|
-| 1 | `app/Console/Commands/LibreTexts/ImportLanguagePack.php` | New artisan command `libretexts:import-language-pack`. Patterned on `libretexts:seed-demo`: builds/loads a course + section graph, imports word-list JSON into `pronunciation_data`, seeds per-course defaults, idempotent against existing sections/enrollments (safe to re-run). |
+| 1 | `app/Console/Commands/LibreTexts/ImportLanguagePack.php` | New artisan command `libretexts:import-language-pack`. Patterned on `libretexts:seed-demo`: builds/loads a course + section graph, imports word-list JSON into `pronunciation_data`, seeds per-course defaults, idempotent against existing sections/enrollments (safe to re-run). Creates `assign_to_timings` + `assign_to_groups` (`group=course`) for every assignment via `ensureAssignmentTiming()` — required, or ADAPT's instructor Assignments view 500s on assignments with no timing. |
 | 2 | `tests/Feature/ImportLanguagePackTest.php` | Feature tests for the importer above (idempotency, assessment-type mapping, defaults). |
 | 3 | `database/migrations/2026_07_05_000001_add_pronunciation_to_questions.php` | Extends `questions.technology` ENUM to add `'pronunciation'` (preserving existing `h5p/webwork/imathas/qti/text` values) and adds a nullable `pronunciation_data` JSON column. `down()` restores `technology` to `VARCHAR(15)` (its pre-migration type), not to the ENUM without `pronunciation`. |
-| 4 | `resources/js/components/questions/PronunciationQuestion.vue` | New Vue component: custom recorder (auto-stop VAD, explicit submit), per-phoneme score-chip breakdown with learner-friendly labels, `completion`/`score` grading modes, emits `scored`. |
+| 4 | `resources/js/components/questions/PronunciationQuestion.vue` | New Vue component: custom recorder (auto-stop VAD, explicit submit), per-phoneme score-chip breakdown with learner-friendly labels, `completion`/`score` grading modes, emits `scored`. Accepts a `preview` prop that disables the mic + submit, used to show the widget read-only in the instructor question preview. |
 | 5 | `app/Http/Controllers/JWTController.php` | `processAnswerJWT()` whitelist (`$problemJWT->adapt->technology`) extended to accept `'pronunciation'` alongside `'webwork'`/`'imathas'`, so the jingo service's signed answer callback is no longer rejected. |
 | 6 | `app/Http/Controllers/AssignmentSyncQuestionController.php` | Question-sync path updated to carry `pronunciation_data` / `pronunciation_problem_jwt` fields through when syncing assignment questions. |
 | 7 | `app/Question.php` | Model: `pronunciation_data` added to fillable/casts (JSON) so it round-trips through Eloquent. |
 | 8 | `app/Submission.php` | Model: handles pronunciation submission shape (audio upload + score payload) alongside existing webwork/imathas submission handling. |
-| 9 | `resources/js/pages/questions.view.vue` | Renders `<pronunciation-question>` when `questions[currentPage-1].technology === 'pronunciation'`; passes `problem-jwt`, `exercise-id`, `language`, `grading` (parsed from `pronunciation_data`), and `service-url` (`window.config.pronunciationServiceUrl`); handles the `@scored="submittedPronunciation"` event. |
+| 9 | `resources/js/pages/questions.view.vue` | Renders `<pronunciation-question>` when `questions[currentPage-1].technology === 'pronunciation'`; passes `problem-jwt`, `exercise-id`, `language`, `grading` (parsed from `pronunciation_data`), and `service-url` (`window.config.pronunciationServiceUrl`); handles the `@scored="submittedPronunciation"` event. Also renders the recorder for instructors (`user.role === 2`) with `:preview` + a banner, so the instructor question preview shows the actual widget instead of a blank body. |
 | 10 | `package.json` | Adds `lamejs` (`^1.2.0`, MP3 encoding for the recorder) and `vue-audio-recorder` (`^3.0.1`) as dependencies. |
 
 ## Apply path A — git am (preferred, preserves commit history)
@@ -34,11 +34,11 @@ cd /path/to/your/adapt/checkout
 git am /path/to/adapt-jingo/adapt-integration/patches/*.patch
 ```
 
-Applies all 8 commits in order, each with its original message and
-`Co-Authored-By` trailer. **Verified 2026-07-07:** applies cleanly via
-`git am` onto `8e198153^` in an isolated worktree — 0 conflicts, exit 0.
+Applies all 10 commits in order, each with its original message and
+`Co-Authored-By` trailer. **Verified 2026-07-08:** all 10 patches apply cleanly
+via `git am` onto `8e198153^` in an isolated worktree — 0 conflicts, exit 0.
 
-Caveat: a plain bulk `git apply --check patches/*.patch` (checking all 8
+Caveat: a plain bulk `git apply --check patches/*.patch` (checking all 10
 files as one batch, not sequentially) reports false "No such file or
 directory" errors on later patches, because bulk `apply --check` isn't
 sequential-state-aware — earlier patches in the same invocation aren't
@@ -54,7 +54,7 @@ If you can't use `git am` (e.g. your ADAPT fork has diverged too far, or
 you only want a subset), copy the file contents from `files/<path>` into
 the same path in your ADAPT checkout, then diff against your local version
 to reconcile any unrelated local changes before overwriting. `files/`
-contains clean snapshots of the 10 files as of `ee9478b0` (branch tip) —
+contains clean snapshots of the 10 files as of `b0adeef4` (branch tip / `main`) —
 not diffs.
 
 ## Post-apply wiring checklist

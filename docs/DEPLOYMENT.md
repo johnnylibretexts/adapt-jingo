@@ -154,6 +154,23 @@ Set `JINGO_ALLOWED_ORIGIN` on the jingo side to ADAPT's own public origin
 origin. A mismatch here shows up as a CORS rejection in the student's
 browser console, not a server-side error.
 
+**⚠️ The service URL is baked into the page at load time.** ADAPT injects it into
+`window.config.pronunciationServiceUrl` when the SPA shell is rendered (from
+`config('myconfig.pronunciation_service_url')`, which reads
+`PRONUNCIATION_SERVICE_URL`). Consequences to watch for:
+- Laravel **config caching** freezes the value at cache time. If you
+  `php artisan config:cache`, the runtime `.env` is ignored — clear it
+  (`config:clear`) or re-cache after setting the URL.
+- After you change the URL, **already-open browser tabs keep the old value**
+  until a full reload — a soft SPA navigation won't pick it up. Tell testers to
+  hard-reload.
+- If you **decommission the old scorer host** (e.g. rename `pron`→`jingo`), a
+  stale tab still posts `/score` to the dead host; that fetch throws in the
+  browser and ADAPT silently falls back to **completion credit** — it *looks*
+  like scoring "works" but nothing is ever scored. Symptom: uploads succeed
+  (`POST /api/submission-audios/... 200`) but the scorer's access log shows no
+  `/score` hits. Fix = hard-reload the tab.
+
 ## 8. Smoke test — `/health`
 
 ```bash

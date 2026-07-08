@@ -9,10 +9,13 @@
     <div v-if="!feedback" class="pron-recorder">
       <!-- IDLE -->
       <div v-if="state === 'idle'" class="pron-stage text-center">
-        <button type="button" class="btn btn-primary pron-mic" @click="startRecording">
+        <button type="button" class="btn btn-primary pron-mic" :disabled="preview" @click="startRecording">
           <span class="pron-mic-dot"></span> Record
         </button>
-        <p class="pron-hint small text-muted mt-2">
+        <p v-if="preview" class="pron-hint small text-muted mt-2">
+          Instructor preview — this is exactly what students see; recording is disabled here.
+        </p>
+        <p v-else class="pron-hint small text-muted mt-2">
           Tap record and say the prompt aloud. Recording stops on its own when you finish.
         </p>
       </div>
@@ -119,6 +122,7 @@ export default {
     audioUploadUrl: { type: String, required: true },
     serviceUrl: { type: String, required: true },
     answerPostUrl: { type: String, default: '/api/jwt/process-answer-jwt' },
+    preview: { type: Boolean, default: false },
   },
   data() {
     return {
@@ -142,6 +146,7 @@ export default {
   },
   methods: {
     async startRecording() {
+      if (this.preview) return;
       this.error = null;
       if (!navigator.mediaDevices || !window.AudioContext && !window.webkitAudioContext) {
         this.error = 'Recording is not supported in this browser. Try desktop Chrome.';
@@ -300,6 +305,7 @@ export default {
     },
 
     async submitForScoring() {
+      if (this.preview) return;
       if (!this.audioBlob) { this.error = 'Record an attempt first.'; return; }
       this.error = null;
       this.state = 'submitting';

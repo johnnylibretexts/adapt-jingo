@@ -70,6 +70,14 @@ scoring.
                                   not from anything re-fetched from jingo
 ```
 
+**Instructor preview:** the same `<pronunciation-question>` widget also renders
+for instructors (`user.role === 2`) in the question preview, but with a
+`preview` prop that disables the Record button and short-circuits
+`startRecording()`/`submitForScoring()`. Instructors thus see exactly the
+student widget without any mic capture, upload, or gradeback occurring. Without
+this, a pronunciation question renders as a blank body in the instructor
+"View Assessments" page (the recorder was previously gated to students only).
+
 ## Why two payloads come back from `/score`
 
 `/score` returns two things with different trust levels and different

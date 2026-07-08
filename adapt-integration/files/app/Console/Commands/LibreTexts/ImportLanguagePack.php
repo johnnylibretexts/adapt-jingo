@@ -302,7 +302,45 @@ class ImportLanguagePack extends Command
         if (!$assignment->exists) {
             $assignment->save();
         }
+        // Every assignment needs an assign_to_timings row (+ an assign_to_groups
+        // 'course' row) or the instructor Assignments view 500s — Assignment.php
+        // does array_values($assign_to_groups[$assignment->id]) and throws
+        // "Undefined offset" for an assignment with no timing/group. Previously the
+        // import skipped this, leaving lesson assignments unschedulable and the whole
+        // course's Assignments list broken. Idempotent; mirrors SeedDemo.
+        $this->ensureAssignmentTiming((int) $assignment->id, $courseId, $now);
         return $assignment;
+    }
+
+    /**
+     * Ensure the assign_to_timings (+ assign_to_groups 'course') rows for an
+     * assignment. Idempotent by assignment_id. Mirrors SeedDemo::ensureAssignmentTiming.
+     * final_submission_deadline stays null, which is safe here because every imported
+     * assignment uses late_policy='not accepted' (the null-deadline crash in
+     * Assignment.php:481 only fires when the policy is NOT 'not accepted').
+     */
+    private function ensureAssignmentTiming(int $assignmentId, int $courseId, Carbon $now): int
+    {
+        $timing = DB::table('assign_to_timings')->where('assignment_id', $assignmentId)->first();
+        $values = [
+            'assignment_id' => $assignmentId,
+            'available_from' => $now->copy()->subDay()->toDateTimeString(),
+            'due' => $now->copy()->addMonths(3)->toDateTimeString(),
+            'final_submission_deadline' => null,
+            'updated_at' => $now,
+        ];
+        if ($timing) {
+            DB::table('assign_to_timings')->where('id', $timing->id)->update($values);
+            $timingId = $timing->id;
+        } else {
+            $values['created_at'] = $now;
+            $timingId = DB::table('assign_to_timings')->insertGetId($values);
+        }
+        DB::table('assign_to_groups')->updateOrInsert(
+            ['assign_to_timing_id' => $timingId, 'group' => 'course', 'group_id' => $courseId],
+            ['updated_at' => $now, 'created_at' => $now]
+        );
+        return (int) $timingId;
     }
 
     /**
