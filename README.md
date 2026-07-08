@@ -36,6 +36,82 @@ jingo scores audio using `facebook/wav2vec2-xlsr-53-espeak-cv-ft` (Apache-2.0), 
 CTranslate2 format. **No model weights are committed to this repository** — the engine
 fetches/exports the model at deploy time.
 
+## Scoring — how a score is produced
+
+jingo scores at the **phoneme** level and rolls up to a single 0–100 number.
+
+1. **Forced alignment + GOP.** The wav2vec2 phoneme model emits per-frame
+   posteriors over the espeak phoneme inventory. For each expected phoneme in the
+   reference sequence, the engine computes a **Goodness of Pronunciation (GOP)
+   ratio** — roughly, the log-probability the model assigned to the *expected*
+   phoneme minus the best competing phoneme, over the frames aligned to it. The
+   ratio is `≤ 0`, where **`0` = a perfect match** and more-negative = worse.
+2. **Calibration curve (primary knob).** Each raw GOP ratio is mapped to 0–100
+   through a **normalized logistic** curve
+   (`score = 100 · σ(slope·(ratio − midpoint)) / σ(slope·midpoint@0)`), so a
+   perfect phoneme scores exactly 100. The curve lives in a swappable JSON asset,
+   **not** in code:
+   [`engine/src/jingo_engine/assets/calibration-v1.json`](engine/src/jingo_engine/assets/calibration-v1.json)
+   → `curve: { midpoint, slope }`.
+3. **Overall = mean (secondary knob).** The word/utterance `overall` is the
+   **arithmetic mean** of the reliable per-phoneme scores. One bad sound among
+   several good ones is therefore *diluted* — if you want isolated mistakes to
+   bite harder, this is the place to change the aggregation (e.g. penalize the
+   worst phoneme, or use a low percentile instead of the mean).
+
+### Current curve — **STRICT** (`midpoint −2.0, slope 1.5`, `v1.2-strict-2026.07`)
+
+| Sound quality | GOP ratio | Score |
+|---|---|---|
+| perfect | 0 | 100 |
+| nearly perfect | −0.5 | 95 |
+| mildly off | −1.0 | 86 |
+| noticeably off | −1.5 | 71 |
+| clearly off | −2.0 | 52 |
+| quite wrong | −3.0 | 19 |
+| very wrong | −4.0 | 5 |
+
+**Making it stricter or looser:** move `midpoint` toward `0` and/or raise `slope`
+to be **stricter** (the same audio scores lower); move `midpoint` more negative
+and/or lower `slope` to be **more lenient**. The prior default was `−3.0 / 1.3`
+(much more forgiving: "clearly off" scored ~80). Because the curve is baked into
+the engine package at install time, **changing it requires rebuilding the jingo
+image** (`docker compose build` in the jingo deploy dir) and restarting the
+container — a plain restart is not enough.
+
+### Other scoring knobs (also in the calibration JSON)
+
+- **`weak_tag_threshold`** — phonemes scoring below this are surfaced to the
+  learner as "sounds to review."
+- **`unreliable_phones`** — a quarantine list of phonemes the model can't judge
+  dependably (per real-audio verdicts). These are shown greyed-out ("not judged
+  confidently") and, with `aggregate_gate: reliable_only`, are **excluded from
+  the overall mean** rather than dragging it down.
+- **`equivalence_classes`** — accepted standard/dialectal realizations that are
+  scored as one class (e.g. Spanish *yeísmo* `ʝ/j/ʎ`, spirantization `β/b`, French
+  nasal mergers), so a valid regional variant isn't marked wrong.
+- **`uncertainty`** — shadow split-conformal confidence bands per phoneme; a
+  conservative *abstain* recommendation the UI can honor, not an automatic score
+  change.
+
+### Per-phoneme display bands (in ADAPT's UI)
+
+The chip colors in `PronunciationQuestion.vue` come from the calibrated score:
+**≥ 75 = good** (green), **≥ 60 = ok** (amber), **otherwise = needs work** (red);
+quarantined/low-confidence phonemes render grey with a `–`.
+
+### Important caveats (from the engine's own calibration notes)
+
+- All calibration values are **PROVISIONAL** — the curve was fit on a
+  synthetic-TTS proxy and triaged against real audio (TalkBank/YouTube), not on
+  human-rated learner audio.
+- Absolute thresholds are **channel-sensitive** — mic, codec, and room noise
+  shift the raw ratios, which is exactly why every score is flagged *provisional
+  — treat as approximate* in the UI.
+- Real-audio triage found the previous low end **too lenient**; the STRICT curve
+  above is the response to that (and to operator feedback that scoring was too
+  generous).
+
 ## Accuracy disclaimer
 
 Scoring produced by jingo is **provisional** (`provisional: true` in engine output). It is a
