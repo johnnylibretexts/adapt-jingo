@@ -9,14 +9,69 @@ Each provider loads its model(s) once and exposes:
 Keeping the engine behind a common interface makes it swappable — the project
 rule favours open, self-hosted, provider-abstracted models. Default is Kokoro
 (Apache-2.0); Piper stays available as a lighter alternative."""
+import base64
+import json
 import logging
 import os
+import urllib.request
 
 import numpy as np
 
 from . import config
 
 logger = logging.getLogger("jingo-tts")
+
+
+class GeminiProvider:
+    """Google Gemini TTS (proprietary cloud). High quality; language auto-detected;
+    style/pace steered by a natural-language prefix. Needs GEMINI_API_KEY — without
+    it .available is False and the service runs cache-only."""
+
+    ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+
+    def __init__(self):
+        self._key = config.GEMINI_API_KEY
+        self._voice = config.GEMINI_VOICE
+        if self._key:
+            logger.info("gemini ready (voice=%s, model=%s)", self._voice, config.GEMINI_MODEL)
+        else:
+            logger.warning("gemini: no GEMINI_API_KEY — cache-only (503 on miss)")
+
+    @property
+    def available(self):
+        return bool(self._key)
+
+    @property
+    def languages(self):
+        return ["*"]  # auto-detected by the model
+
+    def voice_id(self, lang, voice=None):
+        return voice or self._voice
+
+    def synthesize(self, text, lang, voice=None):
+        prompt = f'{config.GEMINI_STYLE}"{text}"'
+        body = json.dumps({
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "responseModalities": ["AUDIO"],
+                "speechConfig": {
+                    "voiceConfig": {
+                        "prebuiltVoiceConfig": {"voiceName": voice or self._voice}
+                    }
+                },
+            },
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            self.ENDPOINT.format(model=config.GEMINI_MODEL),
+            data=body,
+            headers={"x-goog-api-key": self._key, "Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            data = json.load(resp)
+        b64 = data["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
+        pcm = base64.b64decode(b64)  # 24 kHz, 16-bit, mono
+        arr = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
+        return arr, 24000
 
 
 class KokoroProvider:
@@ -41,14 +96,14 @@ class KokoroProvider:
     def languages(self):
         return sorted(self._voices.keys())
 
-    def voice_id(self, lang):
-        return self._voices.get(lang) or self._voices.get(config.DEFAULT_LANG)
+    def voice_id(self, lang, voice=None):
+        return voice or self._voices.get(lang) or self._voices.get(config.DEFAULT_LANG)
 
-    def synthesize(self, text, lang):
+    def synthesize(self, text, lang, voice=None):
         use_lang = lang if lang in self._voices else config.DEFAULT_LANG
         espeak_lang = config.KOKORO_LANG_CODES.get(use_lang, use_lang)
         samples, sr = self._k.create(
-            text, voice=self.voice_id(lang), speed=config.SPEED, lang=espeak_lang
+            text, voice=self.voice_id(lang, voice), speed=config.SPEED, lang=espeak_lang
         )
         return np.asarray(samples, dtype=np.float32).squeeze(), int(sr)
 
@@ -76,13 +131,13 @@ class PiperProvider:
     def languages(self):
         return sorted(self._voices.keys())
 
-    def voice_id(self, lang):
-        return self._names.get(lang) or self._names.get(config.DEFAULT_LANG)
+    def voice_id(self, lang, voice=None):
+        return voice or self._names.get(lang) or self._names.get(config.DEFAULT_LANG)
 
     def _voice(self, lang):
         return self._voices.get(lang) or self._voices.get(config.DEFAULT_LANG)
 
-    def synthesize(self, text, lang):
+    def synthesize(self, text, lang, voice=None):
         pcm = bytearray()
         sr = 22050
         for chunk in self._voice(lang).synthesize(text):
@@ -94,6 +149,8 @@ class PiperProvider:
 
 def build_provider():
     """Construct the provider named by TTS_ENGINE (default kokoro)."""
+    if config.TTS_ENGINE == "gemini":
+        return GeminiProvider()
     if config.TTS_ENGINE == "piper":
         return PiperProvider()
     return KokoroProvider()

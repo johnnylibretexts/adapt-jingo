@@ -12,6 +12,7 @@ behind a small provider interface ([`app/provider.py`](app/provider.py)):
 |---|---|---|
 | **`kokoro`** (default) | Apache-2.0 | [Kokoro-82M](https://github.com/hexgrad/kokoro) — natural, multilingual; one model + one voice pack cover all languages. |
 | `piper` | MIT | [Piper](https://github.com/OHF-Voice/piper1-gpl) — lighter/faster, one voice model per language, more robotic. |
+| `gemini` | proprietary | [Google Gemini TTS](https://ai.google.dev/gemini-api/docs/speech-generation) — highest quality, especially for single words (steered via a "say clearly and slowly" prompt); language auto-detected. **Needs `GEMINI_API_KEY`.** Not open-source — opt-in. With caching, the proprietary call happens only once per clip (generation); play-time serves static files. Without a key the service is **cache-only** (serves pre-generated clips, 503 on a miss). |
 
 ## Why on-demand instead of pre-made files
 
@@ -54,6 +55,9 @@ of engine. Pick the engine for **quality**, not latency.
 | `KOKORO_VOICES` | `{"es":"ef_dora","fr":"ff_siwis"}` | Language → Kokoro voice id. |
 | `KOKORO_LANG_CODES` | `{"es":"es","fr":"fr-fr"}` | ADAPT lang → espeak lang (they differ for French). |
 | `PIPER_VOICE_DIR` / `PIPER_VOICES` | `…/voices` · `{"es":"es_MX-ald-medium"}` | Piper voice dir + map (only if `TTS_ENGINE=piper`). |
+| `GEMINI_API_KEY` | — | Google API key (only if `TTS_ENGINE=gemini`). Provide via a project `.env`; never commit it. |
+| `GEMINI_MODEL` / `GEMINI_VOICE` | `gemini-2.5-flash-preview-tts` · `Zephyr` | Gemini TTS model + prebuilt voice name. |
+| `GEMINI_STYLE` | `"Say clearly and slowly…: "` | Instruction prefix; Gemini voices only the quoted text, which fixes rushed single words. |
 | `TTS_DEFAULT_LANG` | `es` | Fallback language. |
 | `TTS_CACHE_DIR` | `/opt/libretexts/tts/cache` | Persistent MP3 cache. |
 | `TTS_ALLOWED_ORIGIN` | `*` | CORS origin (set to the ADAPT origin in production). |

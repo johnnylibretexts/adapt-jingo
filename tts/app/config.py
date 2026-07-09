@@ -9,8 +9,21 @@ alternative. Selected via TTS_ENGINE."""
 import json
 import os
 
-# Which synthesis backend to use: "kokoro" (default) or "piper".
+# Which synthesis backend to use: "kokoro" (default), "piper", or "gemini".
 TTS_ENGINE = os.environ.get("TTS_ENGINE", "kokoro")
+
+# --- Gemini (proprietary Google cloud engine; opt-in) ---
+# Runtime synthesis needs GEMINI_API_KEY; without it the service is cache-only
+# (serves pre-generated clips, 503 on a miss). Language is auto-detected.
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-preview-tts")
+GEMINI_VOICE = os.environ.get("GEMINI_VOICE", "Zephyr")
+# Prefixed as an instruction; Gemini voices only the quoted text (per the docs'
+# "Say <style>: '<text>'" pattern), which also fixes rushed single words.
+GEMINI_STYLE = os.environ.get(
+    "GEMINI_STYLE",
+    "Say clearly and slowly, as a pronunciation example for a language learner: ",
+)
 
 # --- Kokoro (default engine) ---
 # Model + combined voice pack (mounted at runtime; not baked into the image).

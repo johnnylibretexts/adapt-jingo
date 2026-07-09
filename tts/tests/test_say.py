@@ -19,10 +19,10 @@ class FakeProvider:
         self.voices = {"es": "ef_dora", "fr": "ff_siwis"}
         self.calls = 0
 
-    def voice_id(self, lang):
-        return self.voices.get(lang) or self.voices["es"]
+    def voice_id(self, lang, voice=None):
+        return voice or self.voices.get(lang) or self.voices["es"]
 
-    def synthesize(self, text, lang):
+    def synthesize(self, text, lang, voice=None):
         self.calls += 1
         return np.zeros(100, dtype=np.float32), 24000
 

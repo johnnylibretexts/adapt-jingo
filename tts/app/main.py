@@ -71,31 +71,42 @@ def health():
     }
 
 
+def _clip_path(voice_id: str, lang: str, text: str) -> str:
+    # Cache key = version + engine + voice + lang + text. Bump the version tag if
+    # the render (pacing/style) changes for a given engine+voice.
+    sig = f"v2|{config.TTS_ENGINE}|{voice_id}|{lang}|{text}"
+    key = hashlib.sha256(sig.encode("utf-8")).hexdigest()
+    return os.path.join(config.CACHE_DIR, key + ".mp3")
+
+
 @app.get("/say")
 def say(
     text: str = Query(..., description="Word or short phrase to speak"),
     lang: str = Query("es", description="Language code (es, fr, ...)"),
+    voice: str = Query(None, description="Override the default voice (for A/B sampling)"),
 ):
-    """Return an MP3 of `text` spoken in `lang`. Cached on disk per engine+voice+text."""
+    """Return an MP3 of `text` spoken in `lang`. Served from the disk cache when
+    present (so a keyless box still serves pre-generated clips); otherwise
+    synthesized on demand if the engine is available."""
     text = (text or "").strip()
     if not text:
         raise HTTPException(status_code=400, detail="empty text")
     if len(text) > config.MAX_CHARS:
         raise HTTPException(status_code=413, detail="text too long")
-    if not _provider.available:
-        raise HTTPException(status_code=503, detail="tts engine unavailable")
 
-    voice_id = _provider.voice_id(lang) or "default"
-    # Render signature (engine, voice, speed, padding) is part of the key so a
-    # pacing change transparently invalidates old clips.
-    sig = f"{config.TTS_ENGINE}|{voice_id}|s{config.SPEED}|p{config.PAD_LEAD_S},{config.PAD_TRAIL_S}|{text}"
-    key = hashlib.sha256(sig.encode("utf-8")).hexdigest()
-    path = os.path.join(config.CACHE_DIR, key + ".mp3")
+    voice_id = _provider.voice_id(lang, voice) or "default"
+    path = _clip_path(voice_id, lang, text)
 
     if not os.path.exists(path):
+        if not _provider.available:
+            raise HTTPException(status_code=503, detail="tts engine unavailable and clip not cached")
         try:
-            samples, sample_rate = _provider.synthesize(text, lang)
-            mp3 = _f32_to_mp3(_pad(samples, sample_rate), sample_rate)
+            samples, sample_rate = _provider.synthesize(text, lang, voice)
+            # Gemini paces itself via the style prompt; only the local engines
+            # get our silence padding.
+            if config.TTS_ENGINE != "gemini":
+                samples = _pad(samples, sample_rate)
+            mp3 = _f32_to_mp3(samples, sample_rate)
         except Exception as exc:
             logger.error("synthesis failed for %r (%s): %s", text, lang, exc)
             raise HTTPException(status_code=500, detail="synthesis failed")
