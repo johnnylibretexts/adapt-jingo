@@ -22,7 +22,8 @@ GEMINI_VOICE = os.environ.get("GEMINI_VOICE", "Zephyr")
 # "Say <style>: '<text>'" pattern), which also fixes rushed single words.
 GEMINI_STYLE = os.environ.get(
     "GEMINI_STYLE",
-    "Say clearly and slowly, as a pronunciation example for a language learner: ",
+    "Say this clearly and naturally, at a calm, unhurried pace, as a single "
+    "natural word (do not spell it out or break it into separate syllables): ",
 )
 
 # --- Kokoro (default engine) ---

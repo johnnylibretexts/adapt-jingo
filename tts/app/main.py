@@ -72,9 +72,12 @@ def health():
 
 
 def _clip_path(voice_id: str, lang: str, text: str) -> str:
-    # Cache key = version + engine + voice + lang + text. Bump the version tag if
-    # the render (pacing/style) changes for a given engine+voice.
-    sig = f"v2|{config.TTS_ENGINE}|{voice_id}|{lang}|{text}"
+    # Cache key = version + engine + voice + lang + text (+ style for gemini, so
+    # tweaking the style prompt transparently invalidates old clips).
+    render = ""
+    if config.TTS_ENGINE == "gemini":
+        render = "|" + hashlib.sha256(config.GEMINI_STYLE.encode("utf-8")).hexdigest()[:8]
+    sig = f"v2|{config.TTS_ENGINE}|{voice_id}|{lang}{render}|{text}"
     key = hashlib.sha256(sig.encode("utf-8")).hexdigest()
     return os.path.join(config.CACHE_DIR, key + ".mp3")
 
