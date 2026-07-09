@@ -61,3 +61,48 @@ def download_and_normalize(audio_url: str, dest_dir: str) -> str:
     finally:
         if os.path.exists(in_path):
             os.remove(in_path)
+
+
+def normalize_upload(data: bytes, dest_dir: str, max_seconds: float) -> str:
+    """Transcode uploaded audio bytes to 16 kHz mono 16-bit PCM WAV.
+
+    Rejects empty input and anything longer than max_seconds. Raises
+    AudioFetchError on any failure (caller maps to a 4xx). Mirrors
+    download_and_normalize but takes bytes instead of a URL — no network I/O."""
+    if not data:
+        raise AudioFetchError("empty audio upload")
+    os.makedirs(dest_dir, exist_ok=True)
+    fd, in_path = tempfile.mkstemp(suffix=".bin", dir=dest_dir)
+    os.close(fd)
+    wav_path = in_path.rsplit(".", 1)[0] + ".wav"
+    try:
+        with open(in_path, "wb") as f:
+            f.write(data)
+        proc = subprocess.run(
+            # -protocol_whitelist: attacker-controlled input can't make a
+            #   playlist/concat demuxer reach out beyond a local file.
+            # -t: hard-cap the OUTPUT duration so a decompression bomb can't
+            #   write a huge WAV before the post-transcode length check.
+            ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+             "-protocol_whitelist", "file,pipe", "-i", in_path,
+             "-t", str(max_seconds + 1),
+             "-ac", "1", "-ar", "16000", "-sample_fmt", "s16", wav_path],
+            capture_output=True,
+        )
+        if proc.returncode != 0 or not os.path.exists(wav_path):
+            raise AudioFetchError("could not decode audio")
+        seconds = os.path.getsize(wav_path) / (16000 * 2)  # 16k samples/s * 2 bytes
+        if seconds > max_seconds:
+            raise AudioFetchError(f"audio too long: {seconds:.1f}s > {max_seconds}s")
+        return wav_path
+    except AudioFetchError:
+        if os.path.exists(wav_path):
+            os.remove(wav_path)
+        raise
+    except Exception as exc:
+        if os.path.exists(wav_path):
+            os.remove(wav_path)
+        raise AudioFetchError(str(exc))
+    finally:
+        if os.path.exists(in_path):
+            os.remove(in_path)
