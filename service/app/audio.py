@@ -79,8 +79,14 @@ def normalize_upload(data: bytes, dest_dir: str, max_seconds: float) -> str:
         with open(in_path, "wb") as f:
             f.write(data)
         proc = subprocess.run(
+            # -protocol_whitelist: attacker-controlled input can't make a
+            #   playlist/concat demuxer reach out beyond a local file.
+            # -t: hard-cap the OUTPUT duration so a decompression bomb can't
+            #   write a huge WAV before the post-transcode length check.
             ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-             "-i", in_path, "-ac", "1", "-ar", "16000", "-sample_fmt", "s16", wav_path],
+             "-protocol_whitelist", "file,pipe", "-i", in_path,
+             "-t", str(max_seconds + 1),
+             "-ac", "1", "-ar", "16000", "-sample_fmt", "s16", wav_path],
             capture_output=True,
         )
         if proc.returncode != 0 or not os.path.exists(wav_path):
