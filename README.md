@@ -13,6 +13,7 @@ This repository packages jingo as four independent, MIT-licensed parts:
 | [`engine/`](engine/) | `jingo_engine` — the scoring library. Computes Goodness of Pronunciation (GOP) over a CTranslate2-exported wav2vec2 phoneme model. Torch-free at runtime. **Does not bundle the model itself.** |
 | [`authoring/`](authoring/) | Build-time grapheme-to-phoneme (G2P) tooling used to construct language packs (word lists + reference phoneme sequences) consumed by the engine. |
 | [`adapt-integration/`](adapt-integration/) | The ADAPT-side changes required to wire the `pronunciation` question type to a running jingo service, delivered as patches (`patches/`) and copy-in files (`files/`). |
+| [`tts/`](tts/) | `jingo-tts` — a small self-hosted text-to-speech service (pluggable engine, default [Kokoro-82M](https://github.com/hexgrad/kokoro), Apache-2.0) powering the **"Hear it"** button, so a learner can hear a model pronunciation before recording. On-demand + cached; open-source, no cloud TTS. |
 
 ## Architecture
 
@@ -23,6 +24,16 @@ pronunciation. The service returns a score and a per-phoneme breakdown, which AD
 into an answer JWT and posts back into its own gradebook. See
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full diagram and component
 responsibilities. *(Added in a later phase of this repo.)*
+
+## "Hear it" exemplar audio (optional)
+
+Alongside *scoring* a learner's attempt, jingo can *play a model pronunciation* of the
+prompt via the optional [`tts/`](tts/) service (self-hosted; default engine Kokoro-82M,
+Apache-2.0). When ADAPT is configured with a TTS URL, the `pronunciation` question shows a
+**🔊 Hear it** button above the recorder — "listen, then record." It synthesizes on demand
+from the same text as the question (no per-word audio files to manage), caches the result,
+and the demo cache is pre-warmed so playback is instant. Spanish + French supported. See
+[`tts/README.md`](tts/README.md).
 
 ## Quickstart
 

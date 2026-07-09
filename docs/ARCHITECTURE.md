@@ -14,6 +14,24 @@ scoring.
 | Object storage (e.g. MinIO) | ADAPT's own deployment | Holds the uploaded audio |
 | `service/` (jingo) | this repo | FastAPI `/score` endpoint — the network-facing scoring component |
 | `engine/` (`jingo_engine`) | this repo | GOP scoring library used by `service/`; no network I/O of its own |
+| `tts/` (`jingo-tts`) | this repo | Optional FastAPI `/say` endpoint (pluggable engine, default Kokoro-82M) for the "Hear it" exemplar button; independent of the scoring path |
+
+## "Hear it" exemplar audio (optional, independent path)
+
+Separate from scoring, ADAPT can offer a **🔊 Hear it** button that plays a model
+pronunciation of the prompt. When `PronunciationQuestion.vue` is given a `ttsUrl`
+(from ADAPT's `PRONUNCIATION_TTS_URL` → `window.config.pronunciationTtsUrl`), it
+calls the [`tts/`](../tts/) service directly:
+
+```
+ PronunciationQuestion.vue ──GET /say?text=<prompt>&lang=<code>──▶ jingo-tts (Piper)
+        ▲                                                              │
+        └──────────────────  audio/mpeg (cached per voice+text)  ◀─────┘
+```
+
+This path never touches the gradebook, object storage, or the JWT contract — it is a
+read-only "listen before you record" aid. The component prefetches on render so the first
+click is instant, and the service caches every clip to disk. See [`../tts/README.md`](../tts/README.md).
 
 ## End-to-end data flow
 

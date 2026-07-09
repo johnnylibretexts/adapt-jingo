@@ -1,0 +1,57 @@
+"""Configuration for the jingo-tts 'Hear it' service.
+
+All values come from the environment so the same image runs in dev and on the
+box without code changes (mirrors the jingo scorer's config module).
+
+The synthesis engine is pluggable (see provider.py): the default is Kokoro
+(Apache-2.0, natural multilingual voices); Piper is kept as a lightweight
+alternative. Selected via TTS_ENGINE."""
+import json
+import os
+
+# Which synthesis backend to use: "kokoro" (default) or "piper".
+TTS_ENGINE = os.environ.get("TTS_ENGINE", "kokoro")
+
+# --- Kokoro (default engine) ---
+# Model + combined voice pack (mounted at runtime; not baked into the image).
+KOKORO_MODEL_PATH = os.environ.get(
+    "KOKORO_MODEL_PATH", "/opt/libretexts/tts/kokoro/kokoro-v1.0.onnx"
+)
+KOKORO_VOICES_PATH = os.environ.get(
+    "KOKORO_VOICES_PATH", "/opt/libretexts/tts/kokoro/voices-v1.0.bin"
+)
+# Map of language code -> Kokoro voice name. Kokoro voice ids encode language
+# (e=Spanish, f=French, a=American English, ...) + gender (f/m). One combined
+# voice pack covers all languages, so adding a language is just a map entry.
+KOKORO_VOICES = json.loads(
+    os.environ.get("KOKORO_VOICES", '{"es": "ef_dora", "fr": "ff_siwis"}')
+)
+# ADAPT language code -> Kokoro/espeak language code (they differ: ADAPT uses
+# "fr" but espeak wants "fr-fr"; Spanish is "es" for both). Extend as needed.
+KOKORO_LANG_CODES = json.loads(
+    os.environ.get("KOKORO_LANG_CODES", '{"es": "es", "fr": "fr-fr"}')
+)
+
+# --- Piper (optional alternative engine) ---
+PIPER_VOICE_DIR = os.environ.get("PIPER_VOICE_DIR", "/opt/libretexts/tts/voices")
+PIPER_VOICES = json.loads(
+    os.environ.get("PIPER_VOICES", '{"es": "es_MX-ald-medium"}')
+)
+
+# Fallback language used when a request's lang has no configured voice.
+DEFAULT_LANG = os.environ.get("TTS_DEFAULT_LANG", "es")
+
+# On-disk cache of synthesized MP3s (one file per engine+voice+text). Persisted
+# across restarts so a given word is only ever synthesized once.
+CACHE_DIR = os.environ.get("TTS_CACHE_DIR", "/opt/libretexts/tts/cache")
+
+# CORS origin allowed to call /say (the ADAPT app). "*" is fine for a read-only
+# TTS endpoint but set it to the ADAPT origin in production.
+ALLOWED_ORIGIN = os.environ.get("TTS_ALLOWED_ORIGIN", "*")
+
+# Reject anything longer than this many characters (a word/short phrase tool,
+# not a document reader). Guards CPU + cache from abuse.
+MAX_CHARS = int(os.environ.get("TTS_MAX_CHARS", "200"))
+
+# MP3 bitrate for the encoded clips.
+MP3_KBPS = os.environ.get("TTS_MP3_KBPS", "96")

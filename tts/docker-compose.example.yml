@@ -1,0 +1,18 @@
+services:
+  jingo-tts:
+    build: .
+    image: jingo-tts:local
+    container_name: jingo-tts
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8010:8010"        # Caddy reverse-proxies tts.<domain> -> here
+    environment:
+      TTS_ENGINE: kokoro              # kokoro (default) | piper
+      KOKORO_MODEL_PATH: /opt/libretexts/tts/kokoro/kokoro-v1.0.onnx
+      KOKORO_VOICES_PATH: /opt/libretexts/tts/kokoro/voices-v1.0.bin
+      KOKORO_VOICES: '{"es":"ef_dora","fr":"ff_siwis"}'
+      TTS_CACHE_DIR: /opt/libretexts/tts/cache
+      TTS_ALLOWED_ORIGIN: https://adapt.example.org
+    volumes:
+      - ./kokoro:/opt/libretexts/tts/kokoro:ro   # populated by scripts/fetch_kokoro.sh
+      - ./cache:/opt/libretexts/tts/cache        # persistent synth cache
