@@ -6,15 +6,17 @@ constructed lazily so tests can monkeypatch `_engine` without installing
 ctranslate2."""
 import logging
 import os
+import time
+from collections import defaultdict
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from . import config
 from .provider import JsonPhoneticsProvider
 from .jwt_util import sign_answer_jwt
-from .audio import download_and_normalize
+from .audio import download_and_normalize, normalize_upload
 
 logger = logging.getLogger("jingo")
 logging.basicConfig(level=logging.INFO)
@@ -50,6 +52,21 @@ app.add_middleware(
     allow_methods=["POST", "OPTIONS"],
     allow_headers=["*"],
 )
+
+# Simple in-memory per-IP fixed-window rate limit for the unauthenticated
+# practice endpoint. Process-local (single worker) — fine for the POC.
+_practice_hits = defaultdict(list)
+
+
+def _practice_rate_limit(request: Request) -> None:
+    now = time.time()
+    ip = request.client.host if request.client else "unknown"
+    window, limit = config.PRACTICE_RATE_WINDOW_S, config.PRACTICE_RATE_MAX
+    hits = [t for t in _practice_hits[ip] if now - t < window]
+    if len(hits) >= limit:
+        raise HTTPException(status_code=429, detail="Too many attempts; slow down.")
+    hits.append(now)
+    _practice_hits[ip] = hits
 
 
 def _score_payload(req: ScoreRequest, status: str, *, overall=None,
@@ -128,6 +145,49 @@ def score(req: ScoreRequest):
         feedback["phoneme_scores"] = _trim_phonemes(payload.get("phoneme_scores"))
         return {"answerJWT": sign_answer_jwt(req.problemJWT, score, config.JWT_SECRET),
                 "feedback": feedback}
+    finally:
+        if wav_path and os.path.exists(wav_path):
+            os.remove(wav_path)
+
+
+@app.post("/practice-score")
+async def practice_score(
+    request: Request,
+    audio: UploadFile = File(...),
+    exercise_id: str = Form(...),
+    language: str = Form(...),
+):
+    """Ungraded practice: score inline audio against exercise_id and return the
+    per-phoneme feedback ONLY (no answerJWT, no gradebook, no stored audio)."""
+    _practice_rate_limit(request)
+    if _engine is None:
+        raise HTTPException(status_code=503, detail="engine unavailable")
+    if _provider.get(language, exercise_id) is None:
+        raise HTTPException(status_code=404, detail="unknown exercise")
+    data = await audio.read()
+    if len(data) > config.MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="audio too large")
+    wav_path = None
+    try:
+        try:
+            wav_path = normalize_upload(data, "/tmp/jingo", config.MAX_AUDIO_SECONDS)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        try:
+            payload = _engine.score_exercise(wav_path, language, exercise_id, _provider)
+        except (ValueError, RuntimeError):
+            raise HTTPException(status_code=422, detail="unscoreable")
+        if payload is None:
+            raise HTTPException(status_code=404, detail="unknown exercise")
+        return {
+            "status": "scored",
+            "overall": payload.get("overall"),
+            "weak_tags": payload.get("weak_tags", []),
+            "provisional": True,
+            "phoneme_scores": _trim_phonemes(payload.get("phoneme_scores")),
+            "exercise_id": exercise_id,
+            "language": language,
+        }
     finally:
         if wav_path and os.path.exists(wav_path):
             os.remove(wav_path)
