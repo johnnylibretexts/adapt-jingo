@@ -82,6 +82,20 @@ download. **No model weights are committed to this repo**; fetch at deploy time:
 ./scripts/fetch_voice.sh es_MX-ald-medium
 ```
 
+## Single-word quality: carrier extraction (Gemini)
+
+Gemini reads a *lone* word with an unpredictable (sometimes English) accent and
+can clip its onset. For the highest quality, generate single words inside a short
+**carrier sentence** ("La palabra es _casa_" / "Le mot est _mot_") — which forces
+a native accent from context — then cut out just the word using Whisper
+word-timestamps. Phrases don't need this (they already carry their own context).
+
+This is a **build-time** step (Whisper is too heavy for per-request runtime):
+`scripts/gen_carrier_words.py` produces the clips + a manifest;
+`scripts/cache_place.py` drops them into the service cache under the exact key
+`/say` computes, so the running service serves them as normal cache hits. A word
+added later falls back to direct synthesis until the generator is re-run.
+
 ## Run locally
 
 ```bash

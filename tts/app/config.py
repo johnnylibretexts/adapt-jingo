@@ -18,12 +18,18 @@ TTS_ENGINE = os.environ.get("TTS_ENGINE", "kokoro")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-preview-tts")
 GEMINI_VOICE = os.environ.get("GEMINI_VOICE", "Zephyr")
-# Prefixed as an instruction; Gemini voices only the quoted text (per the docs'
-# "Say <style>: '<text>'" pattern), which also fixes rushed single words.
+# Prompt template; Gemini voices only the quoted text (per the docs' "Say
+# <style>: '<text>'" pattern). Naming the language stops it reading a lone word
+# with an English accent; "{lang_name}" / "{text}" are filled per request.
 GEMINI_STYLE = os.environ.get(
     "GEMINI_STYLE",
-    "Say this clearly and naturally, at a calm, unhurried pace, as a single "
-    "natural word (do not spell it out or break it into separate syllables): ",
+    'Pronounce this clearly and naturally in {lang_name}, exactly as a native '
+    'speaker would say it — not spelled out or broken into separate syllables: '
+    '"{text}"',
+)
+# ADAPT language code -> language name used in the prompt.
+GEMINI_LANG_NAMES = json.loads(
+    os.environ.get("GEMINI_LANG_NAMES", '{"es": "Spanish", "fr": "French"}')
 )
 
 # --- Kokoro (default engine) ---

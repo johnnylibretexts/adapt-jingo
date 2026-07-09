@@ -49,7 +49,8 @@ class GeminiProvider:
         return voice or self._voice
 
     def synthesize(self, text, lang, voice=None):
-        prompt = f'{config.GEMINI_STYLE}"{text}"'
+        lang_name = config.GEMINI_LANG_NAMES.get(lang, "the target language")
+        prompt = config.GEMINI_STYLE.format(lang_name=lang_name, text=text)
         body = json.dumps({
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {

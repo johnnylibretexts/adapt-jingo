@@ -105,10 +105,9 @@ def say(
             raise HTTPException(status_code=503, detail="tts engine unavailable and clip not cached")
         try:
             samples, sample_rate = _provider.synthesize(text, lang, voice)
-            # Gemini paces itself via the style prompt; only the local engines
-            # get our silence padding.
-            if config.TTS_ENGINE != "gemini":
-                samples = _pad(samples, sample_rate)
+            # A leading buffer keeps the very first consonant (e.g. the "p" in
+            # "perro") from being clipped; trailing silence rounds it off.
+            samples = _pad(samples, sample_rate)
             mp3 = _f32_to_mp3(samples, sample_rate)
         except Exception as exc:
             logger.error("synthesis failed for %r (%s): %s", text, lang, exc)
