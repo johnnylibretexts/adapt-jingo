@@ -72,3 +72,55 @@ def test_rate_limit_429(client, monkeypatch):
     assert _post(client).status_code == 200
     assert _post(client).status_code == 200
     assert _post(client).status_code == 429
+
+
+def test_cleanup_deletes_temp_wav(monkeypatch, tmp_path):
+    # Deliberately does NOT use the `client` fixture: that fixture globally
+    # patches os.path.exists to False, which would make the cleanup path a
+    # no-op and defeat the point of this test. Build a real engine/provider
+    # stub here and let normalize_upload return a real file on disk so the
+    # handler's `finally: os.remove(wav_path)` genuinely runs.
+    monkeypatch.setenv("JINGO_ENGINE_MODEL_DIR", "/tmp/jingo-test-model")
+    monkeypatch.setenv("WEBWORK_JWT_SECRET", "test-secret")
+
+    from app import main
+    importlib.reload(main)
+
+    main._engine = types.SimpleNamespace()
+    monkeypatch.setattr(main._provider, "get",
+                        lambda lang, ex: {"phones": ["k"]} if ex == "known" else None)
+
+    real_wav = tmp_path / "practice.wav"
+    real_wav.write_bytes(b"RIFF....WAVEfmt ")
+    monkeypatch.setattr(main, "normalize_upload",
+                        lambda data, d, s: str(real_wav))
+    monkeypatch.setattr(
+        main._engine, "score_exercise",
+        lambda *a, **k: {"overall": 82.0, "weak_tags": ["r"],
+                         "phoneme_scores": [{"phoneme": "k", "score": 90}]},
+        raising=False)
+
+    test_client = TestClient(main.app)
+    r = test_client.post("/practice-score",
+                         files={"audio": ("a.mp3", io.BytesIO(b"x"), "audio/mpeg")},
+                         data={"exercise_id": "known", "language": "es"})
+    assert r.status_code == 200
+    assert not real_wav.exists()
+
+
+def test_engine_unavailable_503(client):
+    from app import main
+    main._engine = None
+    r = _post(client)
+    assert r.status_code == 503
+
+
+def test_decode_failure_400(client, monkeypatch):
+    from app import main, audio
+
+    def _raise(data, d, s):
+        raise audio.AudioFetchError("bad")
+
+    monkeypatch.setattr(main, "normalize_upload", _raise)
+    r = _post(client)
+    assert r.status_code == 400

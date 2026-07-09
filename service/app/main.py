@@ -53,16 +53,37 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Simple in-memory per-IP fixed-window rate limit for the unauthenticated
-# practice endpoint. Process-local (single worker) — fine for the POC.
+# Sliding-window per-client rate limit for the unauthenticated practice
+# endpoint. Process-local (assumes a single uvicorn worker for the POC).
 _practice_hits = defaultdict(list)
+_MAX_TRACKED_IPS = 4096
+
+
+def _client_ip(request: Request) -> str:
+    # Trust the rightmost X-Forwarded-For entry — the hop added by our own
+    # single, trusted Caddy reverse proxy — so the limit is keyed on the real
+    # client, not the proxy's loopback address. Falls back to the socket peer
+    # when the header is absent (direct/local access). Assumes exactly one
+    # trusted proxy in front; revisit if the topology gains hops.
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        parts = [p.strip() for p in xff.split(",") if p.strip()]
+        if parts:
+            return parts[-1]
+    return request.client.host if request.client else "unknown"
 
 
 def _practice_rate_limit(request: Request) -> None:
     now = time.time()
-    ip = request.client.host if request.client else "unknown"
+    ip = _client_ip(request)
     window, limit = config.PRACTICE_RATE_WINDOW_S, config.PRACTICE_RATE_MAX
-    hits = [t for t in _practice_hits[ip] if now - t < window]
+    # Bound memory: evict stale/empty buckets so distinct source IPs can't
+    # accumulate without limit over long uptime.
+    if len(_practice_hits) > _MAX_TRACKED_IPS:
+        for k in [k for k, v in list(_practice_hits.items())
+                  if not v or now - v[-1] >= window]:
+            del _practice_hits[k]
+    hits = [t for t in _practice_hits.get(ip, ()) if now - t < window]
     if len(hits) >= limit:
         raise HTTPException(status_code=429, detail="Too many attempts; slow down.")
     hits.append(now)
@@ -164,7 +185,7 @@ async def practice_score(
         raise HTTPException(status_code=503, detail="engine unavailable")
     if _provider.get(language, exercise_id) is None:
         raise HTTPException(status_code=404, detail="unknown exercise")
-    data = await audio.read()
+    data = await audio.read(config.MAX_UPLOAD_BYTES + 1)
     if len(data) > config.MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="audio too large")
     wav_path = None
