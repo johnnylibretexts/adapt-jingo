@@ -48,7 +48,7 @@ class KokoroProvider:
         use_lang = lang if lang in self._voices else config.DEFAULT_LANG
         espeak_lang = config.KOKORO_LANG_CODES.get(use_lang, use_lang)
         samples, sr = self._k.create(
-            text, voice=self.voice_id(lang), speed=1.0, lang=espeak_lang
+            text, voice=self.voice_id(lang), speed=config.SPEED, lang=espeak_lang
         )
         return np.asarray(samples, dtype=np.float32).squeeze(), int(sr)
 

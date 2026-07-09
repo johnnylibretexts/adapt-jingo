@@ -59,6 +59,11 @@ of engine. Pick the engine for **quality**, not latency.
 | `TTS_ALLOWED_ORIGIN` | `*` | CORS origin (set to the ADAPT origin in production). |
 | `TTS_MAX_CHARS` | `200` | Reject longer input. |
 | `TTS_MP3_KBPS` | `96` | MP3 bitrate. |
+| `TTS_SPEED` | `0.8` | Synthesis speed; `<1` is slower/clearer (a single word at 1.0 sounds rushed). |
+| `TTS_PAD_LEAD_S` / `TTS_PAD_TRAIL_S` | `0.12` / `0.30` | Silence added before/after the clip. |
+
+> Speed and padding are part of the cache key, so changing them transparently
+> invalidates old clips (delete `cache/` and re-warm to regenerate immediately).
 
 ## Voices & languages
 

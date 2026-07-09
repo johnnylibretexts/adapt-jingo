@@ -37,6 +37,13 @@ app.add_middleware(
 )
 
 
+def _pad(samples: "np.ndarray", sample_rate: int) -> "np.ndarray":
+    """Add a little leading/trailing silence so a single word doesn't feel clipped."""
+    lead = np.zeros(int(sample_rate * config.PAD_LEAD_S), dtype=np.float32)
+    trail = np.zeros(int(sample_rate * config.PAD_TRAIL_S), dtype=np.float32)
+    return np.concatenate([lead, np.asarray(samples, dtype=np.float32).squeeze(), trail])
+
+
 def _f32_to_mp3(samples: "np.ndarray", sample_rate: int) -> bytes:
     """Encode mono float32 [-1,1] samples to MP3 via ffmpeg (no temp files)."""
     pcm = np.asarray(samples, dtype=np.float32).tobytes()
@@ -79,15 +86,16 @@ def say(
         raise HTTPException(status_code=503, detail="tts engine unavailable")
 
     voice_id = _provider.voice_id(lang) or "default"
-    key = hashlib.sha256(
-        f"{config.TTS_ENGINE}|{voice_id}|{text}".encode("utf-8")
-    ).hexdigest()
+    # Render signature (engine, voice, speed, padding) is part of the key so a
+    # pacing change transparently invalidates old clips.
+    sig = f"{config.TTS_ENGINE}|{voice_id}|s{config.SPEED}|p{config.PAD_LEAD_S},{config.PAD_TRAIL_S}|{text}"
+    key = hashlib.sha256(sig.encode("utf-8")).hexdigest()
     path = os.path.join(config.CACHE_DIR, key + ".mp3")
 
     if not os.path.exists(path):
         try:
             samples, sample_rate = _provider.synthesize(text, lang)
-            mp3 = _f32_to_mp3(samples, sample_rate)
+            mp3 = _f32_to_mp3(_pad(samples, sample_rate), sample_rate)
         except Exception as exc:
             logger.error("synthesis failed for %r (%s): %s", text, lang, exc)
             raise HTTPException(status_code=500, detail="synthesis failed")

@@ -55,3 +55,10 @@ MAX_CHARS = int(os.environ.get("TTS_MAX_CHARS", "200"))
 
 # MP3 bitrate for the encoded clips.
 MP3_KBPS = os.environ.get("TTS_MP3_KBPS", "96")
+
+# Playback shaping. A single word at full speed sounds rushed for a learner, so
+# we slow synthesis and add a little silence around the clip. These values are
+# part of the cache key, so changing them transparently invalidates old clips.
+SPEED = float(os.environ.get("TTS_SPEED", "0.8"))        # <1 = slower, clearer
+PAD_LEAD_S = float(os.environ.get("TTS_PAD_LEAD_S", "0.12"))   # silence before
+PAD_TRAIL_S = float(os.environ.get("TTS_PAD_TRAIL_S", "0.30"))  # silence after
