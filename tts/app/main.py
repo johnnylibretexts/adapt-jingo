@@ -77,6 +77,10 @@ def _clip_path(voice_id: str, lang: str, text: str) -> str:
     render = ""
     if config.TTS_ENGINE == "gemini":
         render = "|" + hashlib.sha256(config.GEMINI_STYLE.encode("utf-8")).hexdigest()[:8]
+    elif config.TTS_ENGINE == "polly":
+        # engine tier is part of the voice's sound, so a generative<->neural
+        # switch must invalidate old clips.
+        render = "|" + config.POLLY_ENGINE
     sig = f"v2|{config.TTS_ENGINE}|{voice_id}|{lang}{render}|{text}"
     key = hashlib.sha256(sig.encode("utf-8")).hexdigest()
     return os.path.join(config.CACHE_DIR, key + ".mp3")

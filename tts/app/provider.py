@@ -148,10 +148,66 @@ class PiperProvider:
         return arr, int(sr)
 
 
+class PollyProvider:
+    """Amazon Polly (proprietary AWS cloud). Neural/generative voices with real
+    production quotas — no preview-model rate cap, unlike Gemini — so bulk
+    single-word synthesis just works. es-MX voices: Mia (F) / Andrés (M).
+
+    Needs AWS creds (POLLY_ACCESS_KEY_ID + POLLY_SECRET_ACCESS_KEY); without them
+    .available is False and the service runs cache-only. Requests PCM so the
+    common pad+MP3 pipeline in main.py applies uniformly."""
+
+    def __init__(self):
+        self._client = None
+        self._voice = config.POLLY_VOICE
+        self._engine = config.POLLY_ENGINE
+        if config.POLLY_ACCESS_KEY_ID and config.POLLY_SECRET_ACCESS_KEY:
+            try:
+                import boto3
+                self._client = boto3.client(
+                    "polly",
+                    region_name=config.POLLY_REGION,
+                    aws_access_key_id=config.POLLY_ACCESS_KEY_ID,
+                    aws_secret_access_key=config.POLLY_SECRET_ACCESS_KEY,
+                )
+                logger.info("polly ready (voice=%s, engine=%s, region=%s)",
+                            self._voice, self._engine, config.POLLY_REGION)
+            except Exception as exc:  # pragma: no cover - deployment-only path
+                logger.error("polly init failed: %s", exc)
+        else:
+            logger.warning("polly: no AWS creds — cache-only (503 on miss)")
+
+    @property
+    def available(self):
+        return self._client is not None
+
+    @property
+    def languages(self):
+        return sorted(config.POLLY_VOICES.keys()) or ["*"]
+
+    def voice_id(self, lang, voice=None):
+        return voice or config.POLLY_VOICES.get(lang) or self._voice
+
+    def synthesize(self, text, lang, voice=None):
+        resp = self._client.synthesize_speech(
+            Text=text,
+            VoiceId=self.voice_id(lang, voice),
+            LanguageCode=config.POLLY_LANG_CODES.get(lang, lang),
+            Engine=self._engine,
+            OutputFormat="pcm",                       # 16-bit signed mono LE
+            SampleRate=str(config.POLLY_SAMPLE_RATE),
+        )
+        pcm = resp["AudioStream"].read()
+        arr = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
+        return arr, config.POLLY_SAMPLE_RATE
+
+
 def build_provider():
     """Construct the provider named by TTS_ENGINE (default kokoro)."""
     if config.TTS_ENGINE == "gemini":
         return GeminiProvider()
+    if config.TTS_ENGINE == "polly":
+        return PollyProvider()
     if config.TTS_ENGINE == "piper":
         return PiperProvider()
     return KokoroProvider()

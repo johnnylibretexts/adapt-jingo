@@ -9,7 +9,7 @@ alternative. Selected via TTS_ENGINE."""
 import json
 import os
 
-# Which synthesis backend to use: "kokoro" (default), "piper", or "gemini".
+# Which synthesis backend: "kokoro" (default), "piper", "gemini", or "polly".
 TTS_ENGINE = os.environ.get("TTS_ENGINE", "kokoro")
 
 # --- Gemini (proprietary Google cloud engine; opt-in) ---
@@ -31,6 +31,25 @@ GEMINI_STYLE = os.environ.get(
 GEMINI_LANG_NAMES = json.loads(
     os.environ.get("GEMINI_LANG_NAMES", '{"es": "Spanish", "fr": "French"}')
 )
+
+# --- Amazon Polly (proprietary AWS cloud engine; opt-in) ---
+# Runtime synthesis needs AWS creds (an IAM key PAIR, not a single API key);
+# without them the service is cache-only. Unlike Gemini's preview model, Polly
+# has real production quotas, so bulk single-word generation isn't rate-capped.
+# es-MX generative voices: Mia (F), Andrés (M); available in us-west-2.
+POLLY_ACCESS_KEY_ID = os.environ.get("POLLY_ACCESS_KEY_ID", "")
+POLLY_SECRET_ACCESS_KEY = os.environ.get("POLLY_SECRET_ACCESS_KEY", "")
+POLLY_REGION = os.environ.get("POLLY_REGION", "us-west-2")
+# Engine tier: "generative" (most natural), "neural", or "standard".
+POLLY_ENGINE = os.environ.get("POLLY_ENGINE", "generative")
+# Default voice + per-language voice/lang-code maps (ADAPT lang -> Polly).
+POLLY_VOICE = os.environ.get("POLLY_VOICE", "Mia")
+POLLY_VOICES = json.loads(os.environ.get("POLLY_VOICES", '{"es": "Mia", "fr": "Lea"}'))
+POLLY_LANG_CODES = json.loads(
+    os.environ.get("POLLY_LANG_CODES", '{"es": "es-MX", "fr": "fr-FR"}')
+)
+# Polly PCM output is 8k/16k only; 16k is wideband speech — plenty for a word.
+POLLY_SAMPLE_RATE = int(os.environ.get("POLLY_SAMPLE_RATE", "16000"))
 
 # --- Kokoro (default engine) ---
 # Model + combined voice pack (mounted at runtime; not baked into the image).

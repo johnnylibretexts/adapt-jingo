@@ -81,3 +81,37 @@ def test_say_rejects_overlong_text(client):
 def test_say_503_when_engine_unavailable(client):
     client._provider.available = False
     assert client.get("/say", params={"text": "mesa", "lang": "es"}).status_code == 503
+
+
+def test_polly_provider_inert_without_creds(monkeypatch):
+    """TTS_ENGINE=polly builds the Polly engine; with no AWS creds it is inert
+    (available False, cache-only) rather than crashing the service."""
+    monkeypatch.setenv("TTS_ENGINE", "polly")
+    monkeypatch.delenv("POLLY_ACCESS_KEY_ID", raising=False)
+    monkeypatch.delenv("POLLY_SECRET_ACCESS_KEY", raising=False)
+    import app.config as config
+    import app.provider as provider
+    importlib.reload(config)
+    importlib.reload(provider)
+    p = provider.build_provider()
+    assert type(p).__name__ == "PollyProvider"
+    assert p.available is False
+    assert p.voice_id("es") == "Mia"
+    assert config.POLLY_LANG_CODES["es"] == "es-MX"
+
+
+def test_polly_cache_key_distinct_from_gemini(tmp_path, monkeypatch):
+    """A Polly clip must not collide with a Gemini clip for the same word, and
+    switching engine tier (generative<->neural) must invalidate the key."""
+    monkeypatch.setenv("TTS_CACHE_DIR", str(tmp_path / "cache"))
+    from app import config, main
+    importlib.reload(config)
+    importlib.reload(main)
+    monkeypatch.setattr(config, "TTS_ENGINE", "polly")
+    monkeypatch.setattr(config, "POLLY_ENGINE", "generative")
+    gen = main._clip_path("Mia", "es", "hola")
+    monkeypatch.setattr(config, "POLLY_ENGINE", "neural")
+    neu = main._clip_path("Mia", "es", "hola")
+    monkeypatch.setattr(config, "TTS_ENGINE", "gemini")
+    gemini = main._clip_path("Mia", "es", "hola")
+    assert gen != neu != gemini and gen != gemini

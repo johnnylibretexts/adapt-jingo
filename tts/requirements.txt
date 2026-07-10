@@ -5,3 +5,6 @@ kokoro-onnx>=0.4.9
 numpy>=1.26
 # Optional alternative engine (TTS_ENGINE=piper); uncomment to include:
 # piper-tts==1.4.2
+# Amazon Polly engine (TTS_ENGINE=polly). Proprietary AWS cloud, opt-in — needs
+# an IAM key pair; kept in so the engine is available without a rebuild dance.
+boto3>=1.34
