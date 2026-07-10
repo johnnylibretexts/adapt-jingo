@@ -37,13 +37,31 @@ def slug_id(word, lang):
     return f"{lang}-w-" + re.sub(r"[^a-z]", "", ascii_.lower())
 
 
+# A displayable word token: starts with a letter, keeps internal apostrophes/
+# hyphens (J'aime, belle-sœur, week-end), drops bare punctuation ("?", ",").
+_WORD_TOKEN_RE = re.compile(r"[^\W\d_][\w'’-]*", re.UNICODE)
+
+
+def _attach_word_text(text, spans):
+    """Label each espeak word-span with its source token so the UI can colour
+    real words. espeak only ever MERGES tokens across elisions (e.g. "Qu'est-ce
+    que" -> one span), never splits one, so equal counts make a 1:1 zip safe. On
+    a mismatch we leave text off and the UI falls back to the flat per-sound view."""
+    tokens = _WORD_TOKEN_RE.findall(text or "")
+    if spans and len(tokens) == len(spans):
+        for span, tok in zip(spans, tokens):
+            span["text"] = tok
+    return spans
+
+
 def record(word, lang, g2p):
     rec = phonetics_for(word, lang, g2p, str(DEFAULT_VOCAB_PATH))
     if rec.get("coverage", 0) < 1.0:
         return None, rec.get("unknown")
+    words = _attach_word_text(word, rec.get("words", []))
     return {
         "lang": rec.get("lang", lang), "phones": rec["phones"], "ids": rec["ids"],
-        "words": rec.get("words", []), "coverage": rec.get("coverage", 1.0),
+        "words": words, "coverage": rec.get("coverage", 1.0),
         "unknown": rec.get("unknown", []), "espeak_voice": rec.get("espeak_voice"),
     }, None
 

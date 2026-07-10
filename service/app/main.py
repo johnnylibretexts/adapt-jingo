@@ -125,6 +125,18 @@ def _trim_phonemes(phoneme_scores) -> list:
     return trimmed
 
 
+def _word_spans(record) -> list:
+    """Per-word spans (text + phone range into the flat phoneme_scores list) so
+    the UI can roll the per-sound scores up to real words. Emitted only when the
+    record carries word text for every span (see authoring/gen_word_records.py);
+    otherwise empty and the UI shows the flat per-sound view."""
+    words = (record or {}).get("words") or []
+    if not words or not all(w.get("text") for w in words):
+        return []
+    return [{"text": w["text"], "start": w.get("start"), "len": w.get("len")}
+            for w in words]
+
+
 @app.get("/health")
 def health():
     return {"engine_available": _engine is not None,
@@ -164,6 +176,7 @@ def score(req: ScoreRequest):
         # object with the per-phoneme breakdown for the student UI (display-only).
         feedback = dict(score)
         feedback["phoneme_scores"] = _trim_phonemes(payload.get("phoneme_scores"))
+        feedback["words"] = _word_spans(record)
         return {"answerJWT": sign_answer_jwt(req.problemJWT, score, config.JWT_SECRET),
                 "feedback": feedback}
     finally:
@@ -183,7 +196,8 @@ async def practice_score(
     _practice_rate_limit(request)
     if _engine is None:
         raise HTTPException(status_code=503, detail="engine unavailable")
-    if _provider.get(language, exercise_id) is None:
+    record = _provider.get(language, exercise_id)
+    if record is None:
         raise HTTPException(status_code=404, detail="unknown exercise")
     data = await audio.read(config.MAX_UPLOAD_BYTES + 1)
     if len(data) > config.MAX_UPLOAD_BYTES:
@@ -206,6 +220,7 @@ async def practice_score(
             "weak_tags": payload.get("weak_tags", []),
             "provisional": True,
             "phoneme_scores": _trim_phonemes(payload.get("phoneme_scores")),
+            "words": _word_spans(record),
             "exercise_id": exercise_id,
             "language": language,
         }

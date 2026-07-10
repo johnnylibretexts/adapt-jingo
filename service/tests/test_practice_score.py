@@ -51,6 +51,31 @@ def test_scored_feedback_no_jwt(client):
     assert "answerJWT" not in body
 
 
+def test_word_spans_empty_when_record_has_no_text(client):
+    # Default stub record has no per-word text -> no spans, UI shows flat view.
+    assert _post(client).json()["words"] == []
+
+
+def test_word_spans_exposed_when_record_has_word_text(client, monkeypatch):
+    """When the record carries per-word text, the response exposes word spans
+    (text + phone range into phoneme_scores) so the UI can group by word."""
+    from app import main
+    monkeypatch.setattr(
+        main._provider, "get",
+        lambda lang, ex: {"phones": ["l", "e"],
+                          "words": [{"start": 0, "len": 1, "text": "le"},
+                                    {"start": 1, "len": 1, "text": "et"}]})
+    monkeypatch.setattr(
+        main._engine, "score_exercise",
+        lambda *a, **k: {"overall": 88.0, "weak_tags": [],
+                         "phoneme_scores": [{"phoneme": "l", "score": 90},
+                                            {"phoneme": "e", "score": 80}]},
+        raising=False)
+    words = _post(client).json()["words"]
+    assert [w["text"] for w in words] == ["le", "et"]
+    assert words[0] == {"text": "le", "start": 0, "len": 1}
+
+
 def test_unknown_exercise_404(client):
     assert _post(client, exercise="nope").status_code == 404
 
