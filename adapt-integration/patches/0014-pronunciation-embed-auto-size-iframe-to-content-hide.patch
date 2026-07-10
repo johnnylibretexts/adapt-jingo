@@ -1,0 +1,70 @@
+From 8a01527b3f554f66cd4ff38f987b4ef8048c7b7c Mon Sep 17 00:00:00 2001
+From: johnnylibretexts <264531926+johnnylibretexts@users.noreply.github.com>
+Date: Thu, 9 Jul 2026 21:58:57 -0700
+Subject: [PATCH 14/15] pronunciation(embed): auto-size iframe to content +
+ hide support widget
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The login-free practice embed is framed in the mirror's book pages. Two
+fixes for how it renders there:
+
+- Report the embed's own content height to the parent via postMessage
+  (ResizeObserver), so the parent grows the iframe to fit — the score +
+  per-sound breakdown no longer overflow into an inner scrollbar.
+- Hide ADAPT's global Support Center widget (#support-widget-container),
+  which is position:fixed and clipped at the iframe's edge. It's
+  irrelevant chrome for a login-free practice widget.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01CRePd9rbvtz6UqFuuYMi9U
+(cherry picked from commit 600550a1711a63fd7540d8ed4827447a37d1aec8)
+---
+ resources/js/pages/pronunciation.embed.vue | 31 ++++++++++++++++++++++
+ 1 file changed, 31 insertions(+)
+
+diff --git a/resources/js/pages/pronunciation.embed.vue b/resources/js/pages/pronunciation.embed.vue
+index 11c8a054..166fdcba 100644
+--- a/resources/js/pages/pronunciation.embed.vue
++++ b/resources/js/pages/pronunciation.embed.vue
+@@ -26,5 +26,36 @@ export default {
+     serviceUrl() { return window.config.pronunciationServiceUrl },
+     ttsUrl() { return window.config.pronunciationTtsUrl },
+   },
++  // When embedded in an iframe (e.g. the mirror's book pages), report our own
++  // content height to the parent so it can size the frame to fit — no inner
++  // scrollbar. Harmless when not framed (postMessage to self, no listener).
++  mounted() {
++    // ADAPT injects a global "Support Center" widget (#support-widget-container)
++    // at the page root. It's irrelevant chrome for a login-free practice embed
++    // and, being position:fixed, clips at the iframe's edge — hide it. A style
++    // rule (vs a one-shot removal) also covers the case where it mounts late.
++    const s = document.createElement('style')
++    s.textContent = '#support-widget-container{display:none!important}'
++    document.head.appendChild(s)
++    this.reportHeight = () => {
++      try {
++        const h = Math.ceil(this.$el.getBoundingClientRect().height) + 12
++        window.parent.postMessage({ type: 'pron-embed-height', height: h }, '*')
++      } catch (e) { /* postMessage to a cross-origin parent still succeeds */ }
++    }
++    this.reportHeight()
++    window.addEventListener('load', this.reportHeight)
++    if (window.ResizeObserver) {
++      this.ro = new ResizeObserver(this.reportHeight)
++      this.ro.observe(this.$el)
++    } else {
++      this.heightPoll = setInterval(this.reportHeight, 500)
++    }
++  },
++  beforeDestroy() {
++    window.removeEventListener('load', this.reportHeight)
++    if (this.ro) this.ro.disconnect()
++    if (this.heightPoll) clearInterval(this.heightPoll)
++  },
+ }
+ </script>
+-- 
+2.43.0
+

@@ -1,0 +1,210 @@
+From 0b3d12e4288b68b9d9115a05511d6967f905b5a3 Mon Sep 17 00:00:00 2001
+From: johnnylibretexts <johnny@johnnyrobot.ai>
+Date: Thu, 9 Jul 2026 08:06:31 +0000
+Subject: [PATCH 11/15] feat(pronunciation): "Hear it" exemplar button +
+ target-word TTS
+
+- "Hear it" button plays a jingo-tts model pronunciation of the target word
+  before the learner records; config-gated by PRONUNCIATION_TTS_URL (empty=hidden).
+- spokenText(): send only the target word to TTS (strip the "Escucha y repite:"
+  instruction and the "-- translation").
+- Record button relabeled "Speak it" / "Speak again".
+- Wiring: myconfig.pronunciation_tts_url -> window.config.pronunciationTtsUrl ->
+  <pronunciation-question :tts-url>. Works in student view and instructor preview.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01CRePd9rbvtz6UqFuuYMi9U
+(cherry picked from commit bbb9503e74fbcd0df8ff1730ed442faddd8db12c)
+---
+ config/myconfig.php                           |  1 +
+ .../questions/PronunciationQuestion.vue       | 71 ++++++++++++++++++-
+ resources/js/pages/questions.view.vue         |  4 +-
+ resources/views/spa.blade.php                 |  1 +
+ 4 files changed, 73 insertions(+), 4 deletions(-)
+
+diff --git a/config/myconfig.php b/config/myconfig.php
+index 7addd58e..a0e37278 100644
+--- a/config/myconfig.php
++++ b/config/myconfig.php
+@@ -12,6 +12,7 @@ return [
+         : 'No string exists'),
+     'webwork_renderer_url' => env('WEBWORK_RENDERER_URL', 'https://wwrenderer.libretexts.org'),
+     'pronunciation_service_url' => env('PRONUNCIATION_SERVICE_URL', 'https://pron.libretexts.dev'),
++    'pronunciation_tts_url' => env('PRONUNCIATION_TTS_URL', ''),
+     'webwork_renderer_endpoint' => env('WEBWORK_RENDERER_ENDPOINT', 'render-api'),
+     'db_host' => env('DB_HOST', 'No host provided'),
+     'minpods' => env('MINPODS', 0),
+diff --git a/resources/js/components/questions/PronunciationQuestion.vue b/resources/js/components/questions/PronunciationQuestion.vue
+index daedc9ac..969bb5cb 100644
+--- a/resources/js/components/questions/PronunciationQuestion.vue
++++ b/resources/js/components/questions/PronunciationQuestion.vue
+@@ -2,6 +2,13 @@
+   <div class="pronunciation-question mt-3 mb-3">
+     <h2 class="h7">Pronunciation</h2>
+     <p class="prompt">{{ prompt }}</p>
++    <div v-if="ttsUrl" class="pron-hearit mb-2">
++      <button type="button" class="btn btn-outline-secondary btn-sm pron-hearit-btn"
++              :disabled="playing" @click="playExemplar">
++        <span aria-hidden="true">🔊</span> {{ playing ? 'Playing…' : 'Hear it' }}
++      </button>
++      <span class="pron-hearit-hint small text-muted ml-2">Listen to the model pronunciation, then record your own.</span>
++    </div>
+     <p v-if="grading === 'score'" class="pron-provisional-banner alert alert-warning py-1 px-2">
+       Provisional — channel-sensitive, treat as approximate.
+     </p>
+@@ -10,13 +17,13 @@
+       <!-- IDLE -->
+       <div v-if="state === 'idle'" class="pron-stage text-center">
+         <button type="button" class="btn btn-primary pron-mic" :disabled="preview" @click="startRecording">
+-          <span class="pron-mic-dot"></span> Record
++          <span class="pron-mic-dot"></span> Speak it
+         </button>
+         <p v-if="preview" class="pron-hint small text-muted mt-2">
+           Instructor preview — this is exactly what students see; recording is disabled here.
+         </p>
+         <p v-else class="pron-hint small text-muted mt-2">
+-          Tap record and say the prompt aloud. Recording stops on its own when you finish.
++          Tap Speak it and say the prompt aloud. Recording stops on its own when you finish.
+         </p>
+       </div>
+ 
+@@ -40,7 +47,7 @@
+         <div v-if="state === 'submitting'" class="pron-submitting mt-2">Scoring your attempt…</div>
+         <div v-else class="pron-actions mt-2">
+           <button type="button" class="btn btn-primary" @click="submitForScoring">Submit for scoring</button>
+-          <button type="button" class="btn btn-link btn-sm ml-1" @click="reRecord">Re-record</button>
++          <button type="button" class="btn btn-link btn-sm ml-1" @click="reRecord">Speak again</button>
+         </div>
+       </div>
+     </div>
+@@ -121,6 +128,9 @@ export default {
+     grading: { type: String, default: 'completion' },
+     audioUploadUrl: { type: String, required: true },
+     serviceUrl: { type: String, required: true },
++    // Optional self-hosted Piper TTS base URL. When set, a "Hear it" button
++    // plays an exemplar (model) pronunciation of the prompt. Empty = hidden.
++    ttsUrl: { type: String, default: '' },
+     answerPostUrl: { type: String, default: '/api/jwt/process-answer-jwt' },
+     preview: { type: Boolean, default: false },
+   },
+@@ -133,6 +143,7 @@ export default {
+       elapsedMs: 0,
+       audioUrl: null,           // object URL for playback
+       audioBlob: null,          // encoded mp3 blob to submit
++      playing: false,           // exemplar ("Hear it") clip currently playing
+     };
+   },
+   computed: {
+@@ -145,6 +156,42 @@ export default {
+     },
+   },
+   methods: {
++    // --- "Hear it" exemplar playback (self-hosted TTS) ---
++    // Speak only the target word/phrase, not the instruction or translation.
++    // Prompts look like: `Escucha y repite: «mesa» — table`.
++    spokenText() {
++      const p = (this.prompt || '').trim();
++      // Prefer text inside quotes/guillemets — that is the target word/phrase.
++      const m = p.match(/[«"“‘']([^»"”’']+)[»"”’']/);
++      if (m && m[1].trim()) return m[1].trim();
++      // Otherwise strip a leading "instruction:" prefix and a trailing "— translation".
++      let s = p.replace(/^[^:]{0,40}:\s*/, '');
++      s = s.replace(/\s*[—–-]\s+.*$/, '');
++      return s.trim() || p;
++    },
++    exemplarUrl() {
++      const base = (this.ttsUrl || '').replace(/\/$/, '');
++      const text = encodeURIComponent(this.spokenText());
++      const lang = encodeURIComponent(this.language || 'es');
++      return `${base}/say?text=${text}&lang=${lang}`;
++    },
++    playExemplar() {
++      if (!this.ttsUrl || !this.prompt) return;
++      try {
++        if (!this._exemplar) {
++          this._exemplar = new Audio(this.exemplarUrl());
++          this._exemplar.addEventListener('ended', () => { this.playing = false; });
++          this._exemplar.addEventListener('error', () => { this.playing = false; });
++        }
++        this._exemplar.currentTime = 0;
++        this.playing = true;
++        const p = this._exemplar.play();
++        if (p && p.catch) p.catch(() => { this.playing = false; });
++      } catch (e) {
++        this.playing = false;
++      }
++    },
++
+     async startRecording() {
+       if (this.preview) return;
+       this.error = null;
+@@ -369,14 +416,32 @@ export default {
+       }
+     },
+   },
++  mounted() {
++    // Warm the server + browser cache so the first "Hear it" click is instant.
++    if (this.ttsUrl && this.prompt) {
++      try { fetch(this.exemplarUrl(), { mode: 'cors' }).catch(() => {}); } catch (e) {}
++    }
++  },
+   beforeDestroy() {
+     this._teardownAudio();
++    if (this._exemplar) { try { this._exemplar.pause(); } catch (e) {} this._exemplar = null; }
+     if (this.audioUrl) URL.revokeObjectURL(this.audioUrl);
+   },
+ };
+ </script>
+ 
+ <style scoped>
++.pron-hearit {
++  display: flex;
++  align-items: center;
++  flex-wrap: wrap;
++  gap: 4px 0;
++}
++.pron-hearit-btn {
++  display: inline-flex;
++  align-items: center;
++  gap: 6px;
++}
+ .pron-recorder {
+   max-width: 420px;
+   margin: 0 auto;
+diff --git a/resources/js/pages/questions.view.vue b/resources/js/pages/questions.view.vue
+index 8d738b78..233d76ab 100644
+--- a/resources/js/pages/questions.view.vue
++++ b/resources/js/pages/questions.view.vue
+@@ -2183,6 +2183,7 @@
+                             :grading="(JSON.parse(questions[currentPage-1].pronunciation_data || '{}') || {}).grading || 'completion'"
+                             :audio-upload-url="'/api/submission-audios/' + assignmentId + '/' + questions[currentPage-1].id"
+                             :service-url="pronunciationServiceUrl"
++                            :tts-url="pronunciationTtsUrl"
+                             :preview="user.role === 2"
+                             @scored="submittedPronunciation"
+                           />
+@@ -3217,7 +3218,8 @@ export default {
+     }),
+     isMe: () => window.config.isMe,
+     isLocalMe: () => window.config.isMe && window.location.hostname === 'local.adapt',
+-    pronunciationServiceUrl: () => window.config.pronunciationServiceUrl
++    pronunciationServiceUrl: () => window.config.pronunciationServiceUrl,
++    pronunciationTtsUrl: () => window.config.pronunciationTtsUrl
+   },
+   watch: {
+     openEndedSubmissionType: function (newVal, oldVal) {
+diff --git a/resources/views/spa.blade.php b/resources/views/spa.blade.php
+index 7c1af768..19549c0e 100644
+--- a/resources/views/spa.blade.php
++++ b/resources/views/spa.blade.php
+@@ -12,6 +12,7 @@
+       'isAdmin' => \App\Helpers\Helper::isAdmin(),
+       'toggleColors' => [  'checked' => '#008600', 'unchecked' => '#6c757d' ],
+       'pronunciationServiceUrl' => config('myconfig.pronunciation_service_url'),
++      'pronunciationTtsUrl' => config('myconfig.pronunciation_tts_url'),
+   ];
+ 
+   if (!\Auth::user() && !session()->has('landing_page')){
+-- 
+2.43.0
+

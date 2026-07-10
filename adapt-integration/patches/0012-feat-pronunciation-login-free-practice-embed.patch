@@ -1,0 +1,138 @@
+From 495efcc29daf0e0575358040c6c3bd80e3988c03 Mon Sep 17 00:00:00 2001
+From: johnnylibretexts <johnny@johnnyrobot.ai>
+Date: Thu, 9 Jul 2026 19:26:03 +0000
+Subject: [PATCH 12/15] feat(pronunciation): login-free practice embed
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- PronunciationQuestion.vue mode="practice": posts the recording straight to
+  the jingo scorer /practice-score and renders feedback only — no ADAPT upload,
+  no gradebook. questionId/problemJwt/audioUploadUrl are now optional (unused in
+  practice).
+- New anonymous page /embed/pronunciation (layout "blank", no auth middleware)
+  that mounts only the recorder in practice mode; reads env URLs from
+  window.config and exercise_id/lang/prompt from the query string.
+- Pairs with the jingo scorer /practice-score endpoint and the mirror
+  [[pron|id|lang|prompt]] -> <iframe allow="microphone"> injection.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01CRePd9rbvtz6UqFuuYMi9U
+(cherry picked from commit 33dc2f8040b4e1444dc47e9c48cfd32d49c8b9ac)
+---
+ .../questions/PronunciationQuestion.vue       | 26 ++++++++++++++--
+ resources/js/pages/pronunciation.embed.vue    | 30 +++++++++++++++++++
+ resources/js/router/routes.js                 |  1 +
+ 3 files changed, 54 insertions(+), 3 deletions(-)
+ create mode 100644 resources/js/pages/pronunciation.embed.vue
+
+diff --git a/resources/js/components/questions/PronunciationQuestion.vue b/resources/js/components/questions/PronunciationQuestion.vue
+index 969bb5cb..6619cab3 100644
+--- a/resources/js/components/questions/PronunciationQuestion.vue
++++ b/resources/js/components/questions/PronunciationQuestion.vue
+@@ -120,17 +120,20 @@ const PHONEME_LABELS_FR = {
+ export default {
+   name: 'PronunciationQuestion',
+   props: {
+-    questionId: { type: Number, required: true },
++    questionId: { type: Number, default: 0 },
+     prompt: { type: String, required: true },
+-    problemJwt: { type: String, required: true },
++    problemJwt: { type: String, default: '' },
+     exerciseId: { type: String, required: true },
+     language: { type: String, required: true },
+     grading: { type: String, default: 'completion' },
+-    audioUploadUrl: { type: String, required: true },
++    audioUploadUrl: { type: String, default: '' },
+     serviceUrl: { type: String, required: true },
+     // Optional self-hosted Piper TTS base URL. When set, a "Hear it" button
+     // plays an exemplar (model) pronunciation of the prompt. Empty = hidden.
+     ttsUrl: { type: String, default: '' },
++    // 'graded' (default: upload + score + gradeback) or 'practice' (inline
++    // /practice-score, feedback only, no gradebook).
++    mode: { type: String, default: 'graded' },
+     answerPostUrl: { type: String, default: '/api/jwt/process-answer-jwt' },
+     preview: { type: Boolean, default: false },
+   },
+@@ -356,6 +359,7 @@ export default {
+       if (!this.audioBlob) { this.error = 'Record an attempt first.'; return; }
+       this.error = null;
+       this.state = 'submitting';
++      if (this.mode === 'practice') { await this.practiceScore(); return; }
+ 
+       // 1) Upload the mp3 to ADAPT (axios carries the app's auth like every other API call).
+       let uploadData = null;
+@@ -380,6 +384,22 @@ export default {
+       await this.scoreAudio(audioUrl, uploadData);
+     },
+ 
++    async practiceScore() {
++      // Ungraded: post the mp3 straight to the scorer; render feedback only.
++      try {
++        const form = new FormData();
++        form.append('audio', this.audioBlob, 'attempt.mp3');
++        form.append('exercise_id', this.exerciseId);
++        form.append('language', this.language);
++        const r = await fetch(this.serviceUrl + '/practice-score', { method: 'POST', body: form });
++        if (!r.ok) throw new Error('practice score failed');
++        this.feedback = await r.json();   // practice returns the feedback object directly
++      } catch (e) {
++        this.feedback = { status: 'unscoreable', weak_tags: [] };
++        this.error = 'Could not score your attempt. Try again.';
++      }
++    },
++
+     async scoreAudio(audioUrl, uploadData) {
+       // uploadData carries submission_file_url + date_submitted; the gradeback response from
+       // /api/jwt/process-answer-jwt carries {type, message, completed_all_assignment_questions}
+diff --git a/resources/js/pages/pronunciation.embed.vue b/resources/js/pages/pronunciation.embed.vue
+new file mode 100644
+index 00000000..11c8a054
+--- /dev/null
++++ b/resources/js/pages/pronunciation.embed.vue
+@@ -0,0 +1,30 @@
++<template>
++  <div class="pron-embed p-2">
++    <pronunciation-question
++      v-if="exerciseId"
++      :prompt="prompt"
++      :exercise-id="exerciseId"
++      :language="language"
++      :service-url="serviceUrl"
++      :tts-url="ttsUrl"
++      mode="practice"
++    />
++    <p v-else class="text-danger">Missing exercise.</p>
++  </div>
++</template>
++
++<script>
++import PronunciationQuestion from '~/components/questions/PronunciationQuestion.vue'
++
++export default {
++  components: { PronunciationQuestion },
++  layout: 'blank',            // bare layout, no navbar/login chrome
++  computed: {
++    exerciseId() { return this.$route.query.exercise_id || '' },
++    language() { return this.$route.query.lang || 'es' },
++    prompt() { return this.$route.query.prompt || '' },
++    serviceUrl() { return window.config.pronunciationServiceUrl },
++    ttsUrl() { return window.config.pronunciationTtsUrl },
++  },
++}
++</script>
+diff --git a/resources/js/router/routes.js b/resources/js/router/routes.js
+index 68ba8e3f..d14b8bdb 100644
+--- a/resources/js/router/routes.js
++++ b/resources/js/router/routes.js
+@@ -215,6 +215,7 @@ let general_paths = [
+     component: page('init_lms_assignment.vue')
+   },
+   { path: '/question-in-iframe', name: 'question_in_iframe', component: page('iframe_test.vue') },
++  { path: '/embed/pronunciation', name: 'pronunciation.embed', component: page('pronunciation.embed.vue') },
+   {
+     path: '/assignments/:assignmentId/questions/view/:questionId?/:shownSections?',
+     name: 'questions.view',
+-- 
+2.43.0
+

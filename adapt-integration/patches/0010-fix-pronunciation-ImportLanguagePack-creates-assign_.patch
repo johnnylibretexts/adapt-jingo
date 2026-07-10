@@ -1,7 +1,7 @@
 From b0adeef4978cbe59127655a0439a730899786f83 Mon Sep 17 00:00:00 2001
 From: johnnylibretexts <264531926+johnnylibretexts@users.noreply.github.com>
 Date: Wed, 8 Jul 2026 07:35:23 +0000
-Subject: [PATCH] fix(pronunciation): ImportLanguagePack creates
+Subject: [PATCH 10/15] fix(pronunciation): ImportLanguagePack creates
  assign_to_timings for every assignment
 
 Imported lesson/exam assignments were created without any assign_to_timings /

@@ -41,11 +41,42 @@ needs an AWS IAM key pair, so it stays inert until credentials are supplied. `TT
 (default `1.0`; `<1` = slower) applies a pitch-preserving tempo change across every engine so
 the model pronunciation can be a touch slower for clarity.
 
-## Quickstart
+## Implementing this in your ADAPT (what you need)
 
-See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for how to stand up the service, obtain the
-phoneme model, build or import a language pack, and connect it to an ADAPT instance.
-*(Added in a later phase of this repo.)*
+To run the full pronunciation feature on your own LibreTexts ADAPT instance, you need **two
+things from this repo**: the self-hosted **service(s)**, and the **ADAPT-side integration**.
+Everything here is MIT and self-hostable — no proprietary dependency is required (the optional
+Amazon Polly TTS voice is the one opt-in exception, and the default TTS engine is open-source).
+
+1. **Deploy the scorer** — the [`service/`](service/) FastAPI app + the [`engine/`](engine/)
+   library, as a container. It needs the phoneme **model** (not bundled; the engine's
+   downloader fetches `facebook/wav2vec2-xlsr-53-espeak-cv-ft` → CTranslate2 at deploy time)
+   and a **records directory** (the per-exercise reference pronunciations). Set a shared
+   `WEBWORK_JWT_SECRET` (same value as ADAPT) so signed problem/answer JWTs verify. See
+   [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+2. **(Optional) Deploy jingo-tts** — the [`tts/`](tts/) service for the 🔊 "Hear it" button.
+   Default engine is open-source Kokoro; optionally Amazon Polly for the most natural voices.
+   Point ADAPT at it with `PRONUNCIATION_TTS_URL`. Skip this and scoring still works — the
+   button is just hidden. See [`tts/README.md`](tts/README.md).
+3. **Apply the ADAPT-side integration** — [`adapt-integration/`](adapt-integration/) packages
+   the ~13 ADAPT files (the `pronunciation` question type, the `PronunciationQuestion.vue`
+   widget with Hear-it / practice-embed / word-level views, the DB migration, the
+   `libretexts:import-language-pack` command, the JWT/sync wiring) as a **15-patch series**
+   (`git am patches/*.patch`) plus clean copy-in snapshots. Full step-by-step +
+   post-apply checklist in [`adapt-integration/INTEGRATION.md`](adapt-integration/INTEGRATION.md).
+   Then `npm i` + rebuild the SPA, `php artisan migrate`, and set
+   `window.config.pronunciationServiceUrl` (+ `pronunciationTtsUrl` if using Hear-it).
+4. **Author/import a language pack** — build reference records with the
+   [`authoring/`](authoring/) G2P tools (`gen_word_records.py`, espeak/phonemizer, Mac/Linux
+   with espeak-ng), then `php artisan libretexts:import-language-pack` to load a course.
+   Optional: embed **login-free practice** anywhere by iframing
+   `/embed/pronunciation?exercise_id=…&lang=…&prompt=…` with `allow="microphone"`.
+
+**You do not need any private fork** — `adapt-integration/` applies onto upstream ADAPT
+(`git am -3` if your tree has diverged). This repo is the single, self-contained source.
+
+See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for the full stand-up walkthrough (service,
+model, language pack, ADAPT wiring).
 
 ## Model
 

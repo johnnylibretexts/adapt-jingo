@@ -1,8 +1,8 @@
 From 4d2c2eb469068590321a323f33ac5694cd71dca1 Mon Sep 17 00:00:00 2001
 From: johnnylibretexts <264531926+johnnylibretexts@users.noreply.github.com>
 Date: Sun, 5 Jul 2026 20:46:20 -0700
-Subject: [PATCH 2/8] fix(import): assessment_type uses real time/delayed, not
- varchar(1) codes
+Subject: [PATCH 02/15] fix(import): assessment_type uses real time/delayed,
+ not varchar(1) codes
 
 Task 10 review found assessment_type='r' is runtime-defective: column is
 varchar(15) (2020_12_18_182538), runtime compares against 'real time'/
@@ -81,5 +81,5 @@ index d90f600f..be3e0d12 100644
          $pronQ = Question::where('technology', 'pronunciation')
              ->where('technology_id', 'es-u1-l1-e1')->first();
 -- 
-2.41.0
+2.43.0
 

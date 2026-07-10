@@ -2,6 +2,13 @@
   <div class="pronunciation-question mt-3 mb-3">
     <h2 class="h7">Pronunciation</h2>
     <p class="prompt">{{ prompt }}</p>
+    <div v-if="ttsUrl" class="pron-hearit mb-2">
+      <button type="button" class="btn btn-outline-secondary btn-sm pron-hearit-btn"
+              :disabled="playing" @click="playExemplar">
+        <span aria-hidden="true">🔊</span> {{ playing ? 'Playing…' : 'Hear it' }}
+      </button>
+      <span class="pron-hearit-hint small text-muted ml-2">Listen to the model pronunciation, then record your own.</span>
+    </div>
     <p v-if="grading === 'score'" class="pron-provisional-banner alert alert-warning py-1 px-2">
       Provisional — channel-sensitive, treat as approximate.
     </p>
@@ -10,13 +17,13 @@
       <!-- IDLE -->
       <div v-if="state === 'idle'" class="pron-stage text-center">
         <button type="button" class="btn btn-primary pron-mic" :disabled="preview" @click="startRecording">
-          <span class="pron-mic-dot"></span> Record
+          <span class="pron-mic-dot"></span> Speak it
         </button>
         <p v-if="preview" class="pron-hint small text-muted mt-2">
           Instructor preview — this is exactly what students see; recording is disabled here.
         </p>
         <p v-else class="pron-hint small text-muted mt-2">
-          Tap record and say the prompt aloud. Recording stops on its own when you finish.
+          Tap Speak it and say the prompt aloud. Recording stops on its own when you finish.
         </p>
       </div>
 
@@ -40,7 +47,7 @@
         <div v-if="state === 'submitting'" class="pron-submitting mt-2">Scoring your attempt…</div>
         <div v-else class="pron-actions mt-2">
           <button type="button" class="btn btn-primary" @click="submitForScoring">Submit for scoring</button>
-          <button type="button" class="btn btn-link btn-sm ml-1" @click="reRecord">Re-record</button>
+          <button type="button" class="btn btn-link btn-sm ml-1" @click="reRecord">Speak again</button>
         </div>
       </div>
     </div>
@@ -49,18 +56,49 @@
       <p v-if="feedback.status === 'scored'" class="pron-score">
         Provisional score: {{ Math.round(feedback.overall) }}/100
       </p>
-      <div v-if="feedback.status === 'scored' && feedback.phoneme_scores && feedback.phoneme_scores.length"
+      <div v-if="feedback.status === 'scored' && (wordGroups || (feedback.phoneme_scores && feedback.phoneme_scores.length))"
            class="pron-phonemes mt-2">
-        <div class="pron-phonemes-head small text-muted">Per-sound breakdown</div>
-        <div class="pron-chips">
-          <span v-for="(ps, i) in feedback.phoneme_scores" :key="i"
-                class="pron-chip" :class="'pron-chip--' + chipBand(ps)" :title="chipTitle(ps)">
-            <span class="pron-chip-sym">{{ friendlyLabel(ps.phoneme) }}</span>
-            <span class="pron-chip-score">{{ chipScoreLabel(ps) }}</span>
-          </span>
-        </div>
+        <!-- Word-level view (default): colour the real words so the learner sees
+             WHICH word to work on, in normal spelling — IPA is tucked away. -->
+        <template v-if="wordGroups">
+          <div class="pron-phonemes-head small text-muted">How you did, word by word</div>
+          <div class="pron-words">
+            <span v-for="(w, wi) in wordGroups" :key="'w' + wi"
+                  class="pron-word" :class="'pron-chip--' + w.band"
+                  :title="w.avg == null ? w.text + ' — not judged confidently' : w.text + ' — ' + Math.round(w.avg)">
+              {{ w.text }}
+            </span>
+          </div>
+          <button type="button" class="btn btn-link btn-sm pron-sounds-toggle px-0"
+                  @click="showSounds = !showSounds">
+            {{ showSounds ? '▾ Hide sounds' : '▸ Show sounds (IPA)' }}
+          </button>
+          <div v-if="showSounds" class="pron-sounds-detail">
+            <div v-for="(w, wi) in wordGroups" :key="'wd' + wi" class="pron-word-row">
+              <span class="pron-word-label small text-muted">{{ w.text }}</span>
+              <span class="pron-chips">
+                <span v-for="(ps, i) in w.phonemes" :key="i"
+                      class="pron-chip" :class="'pron-chip--' + chipBand(ps)" :title="chipTitle(ps)">
+                  <span class="pron-chip-sym">{{ friendlyLabel(ps.phoneme) }}</span>
+                  <span class="pron-chip-score">{{ chipScoreLabel(ps) }}</span>
+                </span>
+              </span>
+            </div>
+          </div>
+        </template>
+        <!-- Flat fallback: records without per-word text (e.g. elision merges). -->
+        <template v-else>
+          <div class="pron-phonemes-head small text-muted">Per-sound breakdown</div>
+          <div class="pron-chips">
+            <span v-for="(ps, i) in feedback.phoneme_scores" :key="i"
+                  class="pron-chip" :class="'pron-chip--' + chipBand(ps)" :title="chipTitle(ps)">
+              <span class="pron-chip-sym">{{ friendlyLabel(ps.phoneme) }}</span>
+              <span class="pron-chip-score">{{ chipScoreLabel(ps) }}</span>
+            </span>
+          </div>
+        </template>
         <div class="pron-phonemes-legend small text-muted mt-1">
-          Each box is a speech sound in the word; the number is how close yours was. Grey = not judged confidently.
+          Green = close · amber = a bit off · grey = not judged confidently.
         </div>
       </div>
       <p v-else-if="feedback.status !== 'scored'" class="pron-neutral">
@@ -72,6 +110,9 @@
       <p class="pron-note small text-muted">
         Provisional feedback, not a graded evaluation. Scored on your device's mic.
       </p>
+      <button v-if="mode === 'practice'" type="button" class="btn btn-primary btn-sm mt-2" @click="practiceAgain">
+        Speak again
+      </button>
     </div>
 
     <p v-if="error" class="pron-error text-danger mt-1">{{ error }}</p>
@@ -113,14 +154,20 @@ const PHONEME_LABELS_FR = {
 export default {
   name: 'PronunciationQuestion',
   props: {
-    questionId: { type: Number, required: true },
+    questionId: { type: Number, default: 0 },
     prompt: { type: String, required: true },
-    problemJwt: { type: String, required: true },
+    problemJwt: { type: String, default: '' },
     exerciseId: { type: String, required: true },
     language: { type: String, required: true },
     grading: { type: String, default: 'completion' },
-    audioUploadUrl: { type: String, required: true },
+    audioUploadUrl: { type: String, default: '' },
     serviceUrl: { type: String, required: true },
+    // Optional self-hosted Piper TTS base URL. When set, a "Hear it" button
+    // plays an exemplar (model) pronunciation of the prompt. Empty = hidden.
+    ttsUrl: { type: String, default: '' },
+    // 'graded' (default: upload + score + gradeback) or 'practice' (inline
+    // /practice-score, feedback only, no gradebook).
+    mode: { type: String, default: 'graded' },
     answerPostUrl: { type: String, default: '/api/jwt/process-answer-jwt' },
     preview: { type: Boolean, default: false },
   },
@@ -133,6 +180,8 @@ export default {
       elapsedMs: 0,
       audioUrl: null,           // object URL for playback
       audioBlob: null,          // encoded mp3 blob to submit
+      playing: false,           // exemplar ("Hear it") clip currently playing
+      showSounds: false,        // reveal the per-sound (IPA) detail under the words
     };
   },
   computed: {
@@ -143,8 +192,64 @@ export default {
       const s = Math.floor(this.elapsedMs / 1000);
       return '0:' + String(s).padStart(2, '0');
     },
+    // Roll the flat per-phoneme scores up to per-WORD groups so the learner sees
+    // which word to fix in normal spelling. Null (=> flat fallback) unless the
+    // scorer returned word spans and every span carries its source text.
+    wordGroups() {
+      const fb = this.feedback;
+      if (!fb || fb.status !== 'scored') return null;
+      const words = fb.words, ps = fb.phoneme_scores;
+      if (!words || !words.length || !ps || !ps.length) return null;
+      if (!words.every((w) => w.text && w.start != null && w.len != null)) return null;
+      return words.map((w) => {
+        const phonemes = ps.slice(w.start, w.start + w.len);
+        const scored = phonemes.filter((p) => !this.chipSuppressed(p));
+        let band = 'na', avg = null;
+        if (scored.length) {
+          avg = scored.reduce((a, p) => a + p.score, 0) / scored.length;
+          band = avg >= 75 ? 'good' : avg >= 60 ? 'ok' : 'bad';
+        }
+        return { text: w.text, band, avg, phonemes };
+      });
+    },
   },
   methods: {
+    // --- "Hear it" exemplar playback (self-hosted TTS) ---
+    // Speak only the target word/phrase, not the instruction or translation.
+    // Prompts look like: `Escucha y repite: «mesa» — table`.
+    spokenText() {
+      const p = (this.prompt || '').trim();
+      // Prefer text inside quotes/guillemets — that is the target word/phrase.
+      const m = p.match(/[«"“‘']([^»"”’']+)[»"”’']/);
+      if (m && m[1].trim()) return m[1].trim();
+      // Otherwise strip a leading "instruction:" prefix and a trailing "— translation".
+      let s = p.replace(/^[^:]{0,40}:\s*/, '');
+      s = s.replace(/\s*[—–-]\s+.*$/, '');
+      return s.trim() || p;
+    },
+    exemplarUrl() {
+      const base = (this.ttsUrl || '').replace(/\/$/, '');
+      const text = encodeURIComponent(this.spokenText());
+      const lang = encodeURIComponent(this.language || 'es');
+      return `${base}/say?text=${text}&lang=${lang}`;
+    },
+    playExemplar() {
+      if (!this.ttsUrl || !this.prompt) return;
+      try {
+        if (!this._exemplar) {
+          this._exemplar = new Audio(this.exemplarUrl());
+          this._exemplar.addEventListener('ended', () => { this.playing = false; });
+          this._exemplar.addEventListener('error', () => { this.playing = false; });
+        }
+        this._exemplar.currentTime = 0;
+        this.playing = true;
+        const p = this._exemplar.play();
+        if (p && p.catch) p.catch(() => { this.playing = false; });
+      } catch (e) {
+        this.playing = false;
+      }
+    },
+
     async startRecording() {
       if (this.preview) return;
       this.error = null;
@@ -243,6 +348,11 @@ export default {
       this.error = null;
       this.state = 'idle';
     },
+    practiceAgain() {
+      // Practice is a repeat loop: clear the feedback and reset to a fresh recorder.
+      this.feedback = null;
+      this.reRecord();
+    },
 
     // Per-phoneme chip helpers (mirror johnny-lingo-v2 bands: >=75 good, >=60 ok,
     // else bad; suppressed when the model isn't confident on that sound).
@@ -309,6 +419,7 @@ export default {
       if (!this.audioBlob) { this.error = 'Record an attempt first.'; return; }
       this.error = null;
       this.state = 'submitting';
+      if (this.mode === 'practice') { await this.practiceScore(); return; }
 
       // 1) Upload the mp3 to ADAPT (axios carries the app's auth like every other API call).
       let uploadData = null;
@@ -331,6 +442,22 @@ export default {
 
       // 2) Score + gradeback.
       await this.scoreAudio(audioUrl, uploadData);
+    },
+
+    async practiceScore() {
+      // Ungraded: post the mp3 straight to the scorer; render feedback only.
+      try {
+        const form = new FormData();
+        form.append('audio', this.audioBlob, 'attempt.mp3');
+        form.append('exercise_id', this.exerciseId);
+        form.append('language', this.language);
+        const r = await fetch(this.serviceUrl + '/practice-score', { method: 'POST', body: form });
+        if (!r.ok) throw new Error('practice score failed');
+        this.feedback = await r.json();   // practice returns the feedback object directly
+      } catch (e) {
+        this.feedback = { status: 'unscoreable', weak_tags: [] };
+        this.error = 'Could not score your attempt. Try again.';
+      }
     },
 
     async scoreAudio(audioUrl, uploadData) {
@@ -369,14 +496,32 @@ export default {
       }
     },
   },
+  mounted() {
+    // Warm the server + browser cache so the first "Hear it" click is instant.
+    if (this.ttsUrl && this.prompt) {
+      try { fetch(this.exemplarUrl(), { mode: 'cors' }).catch(() => {}); } catch (e) {}
+    }
+  },
   beforeDestroy() {
     this._teardownAudio();
+    if (this._exemplar) { try { this._exemplar.pause(); } catch (e) {} this._exemplar = null; }
     if (this.audioUrl) URL.revokeObjectURL(this.audioUrl);
   },
 };
 </script>
 
 <style scoped>
+.pron-hearit {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 0;
+}
+.pron-hearit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
 .pron-recorder {
   max-width: 420px;
   margin: 0 auto;
@@ -462,4 +607,35 @@ export default {
 .pron-chip--ok   { background: #fff8e0; border-color: #f2dd97; color: #8a6d10; }
 .pron-chip--bad  { background: #fff1f1; border-color: #f3b9b9; color: #b42318; }
 .pron-chip--na   { background: #f2f4f7; border-color: #e4e7ec; color: #98a2b3; }
+
+/* Word-level view: the real words, coloured by how close the learner was. */
+.pron-words {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.pron-word {
+  padding: 3px 9px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-size: 15px;
+  font-weight: 600;
+}
+.pron-sounds-toggle {
+  text-decoration: none;
+}
+.pron-sounds-detail {
+  margin-top: 6px;
+}
+.pron-word-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+.pron-word-label {
+  min-width: 72px;
+  font-weight: 600;
+}
 </style>

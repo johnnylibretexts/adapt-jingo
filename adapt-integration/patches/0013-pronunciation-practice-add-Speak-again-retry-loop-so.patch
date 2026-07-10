@@ -1,0 +1,40 @@
+From dd5822aa5c88b7123f6a7885cfa618b145adee07 Mon Sep 17 00:00:00 2001
+From: johnnylibretexts <johnny@johnnyrobot.ai>
+Date: Thu, 9 Jul 2026 19:43:01 +0000
+Subject: [PATCH 13/15] pronunciation(practice): add "Speak again" retry loop
+ so practice repeats without a page reload
+
+(cherry picked from commit 91e7d2f129fa33488e3b6ae5e53d35664ac6324a)
+---
+ .../js/components/questions/PronunciationQuestion.vue     | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/resources/js/components/questions/PronunciationQuestion.vue b/resources/js/components/questions/PronunciationQuestion.vue
+index 6619cab3..8c9efa9e 100644
+--- a/resources/js/components/questions/PronunciationQuestion.vue
++++ b/resources/js/components/questions/PronunciationQuestion.vue
+@@ -79,6 +79,9 @@
+       <p class="pron-note small text-muted">
+         Provisional feedback, not a graded evaluation. Scored on your device's mic.
+       </p>
++      <button v-if="mode === 'practice'" type="button" class="btn btn-primary btn-sm mt-2" @click="practiceAgain">
++        Speak again
++      </button>
+     </div>
+ 
+     <p v-if="error" class="pron-error text-danger mt-1">{{ error }}</p>
+@@ -293,6 +296,11 @@ export default {
+       this.error = null;
+       this.state = 'idle';
+     },
++    practiceAgain() {
++      // Practice is a repeat loop: clear the feedback and reset to a fresh recorder.
++      this.feedback = null;
++      this.reRecord();
++    },
+ 
+     // Per-phoneme chip helpers (mirror johnny-lingo-v2 bands: >=75 good, >=60 ok,
+     // else bad; suppressed when the model isn't confident on that sound).
+-- 
+2.43.0
+

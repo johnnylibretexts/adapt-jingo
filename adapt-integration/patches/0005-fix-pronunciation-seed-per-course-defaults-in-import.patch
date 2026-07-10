@@ -1,7 +1,7 @@
 From fbbdb1035b99cc8d5663d23e198e68bcbe88c312 Mon Sep 17 00:00:00 2001
 From: johnnylibretexts <264531926+johnnylibretexts@users.noreply.github.com>
 Date: Mon, 6 Jul 2026 22:16:27 -0700
-Subject: [PATCH 5/8] fix(pronunciation): seed per-course defaults in
+Subject: [PATCH 05/15] fix(pronunciation): seed per-course defaults in
  import-language-pack
 
 Imported language courses (Spanish 1, French 1) were created without the
@@ -123,5 +123,5 @@ index 3e5fdb06..0609b553 100644
       * Ensure an assignment. The `assignments` table has NO user_id column
       * (ownership flows via courses.user_id) — see SeedDemo::ensureAssignment
 -- 
-2.41.0
+2.43.0
 

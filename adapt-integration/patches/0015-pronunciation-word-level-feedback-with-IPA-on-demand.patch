@@ -1,0 +1,155 @@
+From 560283bc1d6b936820839d7fa8f31d1d51820e4f Mon Sep 17 00:00:00 2001
+From: johnnylibretexts <johnny@johnnyrobot.ai>
+Date: Fri, 10 Jul 2026 18:25:31 +0000
+Subject: [PATCH 15/15] pronunciation: word-level feedback with IPA-on-demand
+
+Default the per-sound breakdown to coloured WORDS (real spelling) so a learner
+sees which word to fix; tuck the IPA per-phoneme chips under a collapsible
+"Show sounds (IPA)" toggle. Groups the scorer's new per-word spans
+(feedback.words) over phoneme_scores; falls back to the flat per-sound view
+when a record has no per-word text.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+(cherry picked from commit b5cbfdf4ab81a7064b64aae79ac578222874cd8c)
+---
+ .../questions/PronunciationQuestion.vue       | 103 ++++++++++++++++--
+ 1 file changed, 93 insertions(+), 10 deletions(-)
+
+diff --git a/resources/js/components/questions/PronunciationQuestion.vue b/resources/js/components/questions/PronunciationQuestion.vue
+index 8c9efa9e..5cb1ad68 100644
+--- a/resources/js/components/questions/PronunciationQuestion.vue
++++ b/resources/js/components/questions/PronunciationQuestion.vue
+@@ -56,18 +56,49 @@
+       <p v-if="feedback.status === 'scored'" class="pron-score">
+         Provisional score: {{ Math.round(feedback.overall) }}/100
+       </p>
+-      <div v-if="feedback.status === 'scored' && feedback.phoneme_scores && feedback.phoneme_scores.length"
++      <div v-if="feedback.status === 'scored' && (wordGroups || (feedback.phoneme_scores && feedback.phoneme_scores.length))"
+            class="pron-phonemes mt-2">
+-        <div class="pron-phonemes-head small text-muted">Per-sound breakdown</div>
+-        <div class="pron-chips">
+-          <span v-for="(ps, i) in feedback.phoneme_scores" :key="i"
+-                class="pron-chip" :class="'pron-chip--' + chipBand(ps)" :title="chipTitle(ps)">
+-            <span class="pron-chip-sym">{{ friendlyLabel(ps.phoneme) }}</span>
+-            <span class="pron-chip-score">{{ chipScoreLabel(ps) }}</span>
+-          </span>
+-        </div>
++        <!-- Word-level view (default): colour the real words so the learner sees
++             WHICH word to work on, in normal spelling — IPA is tucked away. -->
++        <template v-if="wordGroups">
++          <div class="pron-phonemes-head small text-muted">How you did, word by word</div>
++          <div class="pron-words">
++            <span v-for="(w, wi) in wordGroups" :key="'w' + wi"
++                  class="pron-word" :class="'pron-chip--' + w.band"
++                  :title="w.avg == null ? w.text + ' — not judged confidently' : w.text + ' — ' + Math.round(w.avg)">
++              {{ w.text }}
++            </span>
++          </div>
++          <button type="button" class="btn btn-link btn-sm pron-sounds-toggle px-0"
++                  @click="showSounds = !showSounds">
++            {{ showSounds ? '▾ Hide sounds' : '▸ Show sounds (IPA)' }}
++          </button>
++          <div v-if="showSounds" class="pron-sounds-detail">
++            <div v-for="(w, wi) in wordGroups" :key="'wd' + wi" class="pron-word-row">
++              <span class="pron-word-label small text-muted">{{ w.text }}</span>
++              <span class="pron-chips">
++                <span v-for="(ps, i) in w.phonemes" :key="i"
++                      class="pron-chip" :class="'pron-chip--' + chipBand(ps)" :title="chipTitle(ps)">
++                  <span class="pron-chip-sym">{{ friendlyLabel(ps.phoneme) }}</span>
++                  <span class="pron-chip-score">{{ chipScoreLabel(ps) }}</span>
++                </span>
++              </span>
++            </div>
++          </div>
++        </template>
++        <!-- Flat fallback: records without per-word text (e.g. elision merges). -->
++        <template v-else>
++          <div class="pron-phonemes-head small text-muted">Per-sound breakdown</div>
++          <div class="pron-chips">
++            <span v-for="(ps, i) in feedback.phoneme_scores" :key="i"
++                  class="pron-chip" :class="'pron-chip--' + chipBand(ps)" :title="chipTitle(ps)">
++              <span class="pron-chip-sym">{{ friendlyLabel(ps.phoneme) }}</span>
++              <span class="pron-chip-score">{{ chipScoreLabel(ps) }}</span>
++            </span>
++          </div>
++        </template>
+         <div class="pron-phonemes-legend small text-muted mt-1">
+-          Each box is a speech sound in the word; the number is how close yours was. Grey = not judged confidently.
++          Green = close · amber = a bit off · grey = not judged confidently.
+         </div>
+       </div>
+       <p v-else-if="feedback.status !== 'scored'" class="pron-neutral">
+@@ -150,6 +181,7 @@ export default {
+       audioUrl: null,           // object URL for playback
+       audioBlob: null,          // encoded mp3 blob to submit
+       playing: false,           // exemplar ("Hear it") clip currently playing
++      showSounds: false,        // reveal the per-sound (IPA) detail under the words
+     };
+   },
+   computed: {
+@@ -160,6 +192,26 @@ export default {
+       const s = Math.floor(this.elapsedMs / 1000);
+       return '0:' + String(s).padStart(2, '0');
+     },
++    // Roll the flat per-phoneme scores up to per-WORD groups so the learner sees
++    // which word to fix in normal spelling. Null (=> flat fallback) unless the
++    // scorer returned word spans and every span carries its source text.
++    wordGroups() {
++      const fb = this.feedback;
++      if (!fb || fb.status !== 'scored') return null;
++      const words = fb.words, ps = fb.phoneme_scores;
++      if (!words || !words.length || !ps || !ps.length) return null;
++      if (!words.every((w) => w.text && w.start != null && w.len != null)) return null;
++      return words.map((w) => {
++        const phonemes = ps.slice(w.start, w.start + w.len);
++        const scored = phonemes.filter((p) => !this.chipSuppressed(p));
++        let band = 'na', avg = null;
++        if (scored.length) {
++          avg = scored.reduce((a, p) => a + p.score, 0) / scored.length;
++          band = avg >= 75 ? 'good' : avg >= 60 ? 'ok' : 'bad';
++        }
++        return { text: w.text, band, avg, phonemes };
++      });
++    },
+   },
+   methods: {
+     // --- "Hear it" exemplar playback (self-hosted TTS) ---
+@@ -555,4 +607,35 @@ export default {
+ .pron-chip--ok   { background: #fff8e0; border-color: #f2dd97; color: #8a6d10; }
+ .pron-chip--bad  { background: #fff1f1; border-color: #f3b9b9; color: #b42318; }
+ .pron-chip--na   { background: #f2f4f7; border-color: #e4e7ec; color: #98a2b3; }
++
++/* Word-level view: the real words, coloured by how close the learner was. */
++.pron-words {
++  display: flex;
++  flex-wrap: wrap;
++  gap: 6px;
++}
++.pron-word {
++  padding: 3px 9px;
++  border-radius: 8px;
++  border: 1px solid transparent;
++  font-size: 15px;
++  font-weight: 600;
++}
++.pron-sounds-toggle {
++  text-decoration: none;
++}
++.pron-sounds-detail {
++  margin-top: 6px;
++}
++.pron-word-row {
++  display: flex;
++  align-items: center;
++  flex-wrap: wrap;
++  gap: 8px;
++  margin-top: 6px;
++}
++.pron-word-label {
++  min-width: 72px;
++  font-weight: 600;
++}
+ </style>
+-- 
+2.43.0
+

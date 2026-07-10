@@ -1,8 +1,8 @@
 From 05614b71925627c181dc39de6aff7f2ba8927a02 Mon Sep 17 00:00:00 2001
 From: johnnylibretexts <264531926+johnnylibretexts@users.noreply.github.com>
 Date: Mon, 6 Jul 2026 22:03:38 -0700
-Subject: [PATCH 4/8] feat(pronunciation): custom recorder with auto-stop VAD +
- explicit submit
+Subject: [PATCH 04/15] feat(pronunciation): custom recorder with auto-stop VAD
+ + explicit submit
 
 Replace the vue-audio-recorder widget in PronunciationQuestion.vue with a
 purpose-built recorder:
@@ -432,5 +432,5 @@ index 67047c8d..409f7b80 100644
 +}
 +</style>
 -- 
-2.41.0
+2.43.0
 

@@ -2183,6 +2183,7 @@
                             :grading="(JSON.parse(questions[currentPage-1].pronunciation_data || '{}') || {}).grading || 'completion'"
                             :audio-upload-url="'/api/submission-audios/' + assignmentId + '/' + questions[currentPage-1].id"
                             :service-url="pronunciationServiceUrl"
+                            :tts-url="pronunciationTtsUrl"
                             :preview="user.role === 2"
                             @scored="submittedPronunciation"
                           />
@@ -3217,7 +3218,8 @@ export default {
     }),
     isMe: () => window.config.isMe,
     isLocalMe: () => window.config.isMe && window.location.hostname === 'local.adapt',
-    pronunciationServiceUrl: () => window.config.pronunciationServiceUrl
+    pronunciationServiceUrl: () => window.config.pronunciationServiceUrl,
+    pronunciationTtsUrl: () => window.config.pronunciationTtsUrl
   },
   watch: {
     openEndedSubmissionType: function (newVal, oldVal) {
