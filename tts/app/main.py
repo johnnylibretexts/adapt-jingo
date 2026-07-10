@@ -47,12 +47,16 @@ def _pad(samples: "np.ndarray", sample_rate: int) -> "np.ndarray":
 def _f32_to_mp3(samples: "np.ndarray", sample_rate: int) -> bytes:
     """Encode mono float32 [-1,1] samples to MP3 via ffmpeg (no temp files)."""
     pcm = np.asarray(samples, dtype=np.float32).tobytes()
+    cmd = [
+        "ffmpeg", "-hide_banner", "-loglevel", "error",
+        "-f", "f32le", "-ar", str(sample_rate), "-ac", "1", "-i", "pipe:0",
+    ]
+    # Slow (or speed) delivery without changing pitch, for learner clarity.
+    if abs(config.RATE - 1.0) > 1e-3:
+        cmd += ["-filter:a", f"atempo={config.RATE:.3f}"]
+    cmd += ["-f", "mp3", "-b:a", f"{config.MP3_KBPS}k", "pipe:1"]
     proc = subprocess.run(
-        [
-            "ffmpeg", "-hide_banner", "-loglevel", "error",
-            "-f", "f32le", "-ar", str(sample_rate), "-ac", "1", "-i", "pipe:0",
-            "-f", "mp3", "-b:a", f"{config.MP3_KBPS}k", "pipe:1",
-        ],
+        cmd,
         input=pcm,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -81,6 +85,9 @@ def _clip_path(voice_id: str, lang: str, text: str) -> str:
         # engine tier is part of the voice's sound, so a generative<->neural
         # switch must invalidate old clips.
         render = "|" + config.POLLY_ENGINE
+    # Tempo is post-processing that changes the audio, so it belongs in the key.
+    if abs(config.RATE - 1.0) > 1e-3:
+        render += f"|r{config.RATE:.3f}"
     sig = f"v2|{config.TTS_ENGINE}|{voice_id}|{lang}{render}|{text}"
     key = hashlib.sha256(sig.encode("utf-8")).hexdigest()
     return os.path.join(config.CACHE_DIR, key + ".mp3")

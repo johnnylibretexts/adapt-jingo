@@ -115,3 +115,19 @@ def test_polly_cache_key_distinct_from_gemini(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "TTS_ENGINE", "gemini")
     gemini = main._clip_path("Mia", "es", "hola")
     assert gen != neu != gemini and gen != gemini
+
+
+def test_rate_changes_cache_key(tmp_path, monkeypatch):
+    """A tempo change (TTS_RATE) is post-processing that alters the audio, so it
+    must invalidate the clip's cache key; 1.0 is the un-suffixed baseline."""
+    monkeypatch.setenv("TTS_CACHE_DIR", str(tmp_path / "cache"))
+    from app import config, main
+    importlib.reload(config)
+    importlib.reload(main)
+    monkeypatch.setattr(config, "RATE", 1.0)
+    base = main._clip_path("Mia", "es", "hola")
+    monkeypatch.setattr(config, "RATE", 0.9)
+    slow = main._clip_path("Mia", "es", "hola")
+    monkeypatch.setattr(config, "RATE", 0.8)
+    slower = main._clip_path("Mia", "es", "hola")
+    assert base != slow != slower and base != slower

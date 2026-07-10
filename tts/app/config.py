@@ -101,3 +101,11 @@ MP3_KBPS = os.environ.get("TTS_MP3_KBPS", "96")
 SPEED = float(os.environ.get("TTS_SPEED", "0.8"))        # <1 = slower, clearer
 PAD_LEAD_S = float(os.environ.get("TTS_PAD_LEAD_S", "0.12"))   # silence before
 PAD_TRAIL_S = float(os.environ.get("TTS_PAD_TRAIL_S", "0.30"))  # silence after
+
+# Post-synthesis playback tempo applied to EVERY engine's audio via ffmpeg
+# `atempo` (pitch-preserving — it slows the delivery without deepening the voice).
+# 1.0 = unchanged; <1 = slower/clearer for a learner (e.g. 0.9 = 10% slower).
+# Engines like Polly's generative voice don't reliably honour SSML <prosody rate>,
+# so we shape tempo here uniformly. Part of the cache key, so changing it
+# transparently invalidates old clips. Valid ffmpeg atempo range is 0.5–100.
+RATE = float(os.environ.get("TTS_RATE", "1.0"))
