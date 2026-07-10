@@ -13,7 +13,7 @@ This repository packages jingo as four independent, MIT-licensed parts:
 | [`engine/`](engine/) | `jingo_engine` — the scoring library. Computes Goodness of Pronunciation (GOP) over a CTranslate2-exported wav2vec2 phoneme model. Torch-free at runtime. **Does not bundle the model itself.** |
 | [`authoring/`](authoring/) | Build-time grapheme-to-phoneme (G2P) tooling used to construct language packs (word lists + reference phoneme sequences) consumed by the engine. |
 | [`adapt-integration/`](adapt-integration/) | The ADAPT-side changes required to wire the `pronunciation` question type to a running jingo service, delivered as patches (`patches/`) and copy-in files (`files/`). |
-| [`tts/`](tts/) | `jingo-tts` — a small self-hosted text-to-speech service (pluggable engine, default [Kokoro-82M](https://github.com/hexgrad/kokoro), Apache-2.0) powering the **"Hear it"** button, so a learner can hear a model pronunciation before recording. On-demand + cached; open-source, no cloud TTS. |
+| [`tts/`](tts/) | `jingo-tts` — a small self-hosted text-to-speech service powering the **"Hear it"** button, so a learner can hear a model pronunciation before recording. **Pluggable engine** (`TTS_ENGINE`): open-source [Kokoro-82M](https://github.com/hexgrad/kokoro) (Apache-2.0, default) or Piper, or optional cloud voices (Gemini / **Amazon Polly**) for the most natural output. On-demand + cached; a pitch-preserving `TTS_RATE` tempo knob slows delivery for learners. |
 
 ## Architecture
 
@@ -28,12 +28,18 @@ responsibilities. *(Added in a later phase of this repo.)*
 ## "Hear it" exemplar audio (optional)
 
 Alongside *scoring* a learner's attempt, jingo can *play a model pronunciation* of the
-prompt via the optional [`tts/`](tts/) service (self-hosted; default engine Kokoro-82M,
-Apache-2.0). When ADAPT is configured with a TTS URL, the `pronunciation` question shows a
-**🔊 Hear it** button above the recorder — "listen, then record." It synthesizes on demand
-from the same text as the question (no per-word audio files to manage), caches the result,
-and the demo cache is pre-warmed so playback is instant. Spanish + French supported. See
-[`tts/README.md`](tts/README.md).
+prompt via the optional [`tts/`](tts/) service. When ADAPT is configured with a TTS URL, the
+`pronunciation` question shows a **🔊 Hear it** button above the recorder — "listen, then
+record." It synthesizes on demand from the same text as the question (no per-word audio files
+to manage), caches the result, and the demo cache is pre-warmed so playback is instant.
+Spanish + French supported.
+
+The engine is pluggable via `TTS_ENGINE` (see [`tts/README.md`](tts/README.md)): the default
+is open-source **Kokoro-82M** (Apache-2.0). For the most natural voices, an optional
+**Amazon Polly** backend uses generative es-MX (**Mía**) and fr-FR (**Léa**) voices — opt-in,
+needs an AWS IAM key pair, so it stays inert until credentials are supplied. `TTS_RATE`
+(default `1.0`; `<1` = slower) applies a pitch-preserving tempo change across every engine so
+the model pronunciation can be a touch slower for clarity.
 
 ## Quickstart
 
@@ -105,11 +111,19 @@ container — a plain restart is not enough.
   conservative *abstain* recommendation the UI can honor, not an automatic score
   change.
 
-### Per-phoneme display bands (in ADAPT's UI)
+### Feedback display (in ADAPT's UI)
 
-The chip colors in `PronunciationQuestion.vue` come from the calibrated score:
-**≥ 75 = good** (green), **≥ 60 = ok** (amber), **otherwise = needs work** (red);
-quarantined/low-confidence phonemes render grey with a `–`.
+`PronunciationQuestion.vue` defaults to a **word-level** view: the scorer returns
+per-word spans (`words: [{text, start, len}]`) alongside the flat `phoneme_scores`,
+and the UI rolls the per-sound scores up to the real words — colouring each word so a
+learner sees *which word* to fix, in normal spelling. The raw IPA per-phoneme chips sit
+under a collapsible **"Show sounds (IPA)"** toggle. When a record has no per-word text
+(e.g. an elision merge, or a pack not yet regenerated with word text), the UI falls back
+to the flat per-sound chips.
+
+Colours come from the calibrated score in both views: **≥ 75 = good** (green),
+**≥ 60 = ok** (amber), **otherwise = needs work** (red); quarantined/low-confidence
+phonemes render grey with a `–`. Word colour is the mean of the word's reliable sounds.
 
 ### Important caveats (from the engine's own calibration notes)
 
