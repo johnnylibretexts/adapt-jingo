@@ -1,7 +1,7 @@
 From c0482341f4f4af23a84a41cf46e9eeb87aa2beb0 Mon Sep 17 00:00:00 2001
 From: johnnylibretexts <264531926+johnnylibretexts@users.noreply.github.com>
 Date: Mon, 6 Jul 2026 22:34:00 -0700
-Subject: [PATCH 06/15] fix(pronunciation): make import section/enrollment
+Subject: [PATCH 06/16] fix(pronunciation): make import section/enrollment
  idempotent vs existing data
 
 Re-importing a language pack over a course that already had a section (or a

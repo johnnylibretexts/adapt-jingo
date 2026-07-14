@@ -1,7 +1,7 @@
 From 560283bc1d6b936820839d7fa8f31d1d51820e4f Mon Sep 17 00:00:00 2001
 From: johnnylibretexts <johnny@johnnyrobot.ai>
 Date: Fri, 10 Jul 2026 18:25:31 +0000
-Subject: [PATCH 15/15] pronunciation: word-level feedback with IPA-on-demand
+Subject: [PATCH 15/16] pronunciation: word-level feedback with IPA-on-demand
 
 Default the per-sound breakdown to coloured WORDS (real spelling) so a learner
 sees which word to fix; tuck the IPA per-phoneme chips under a collapsible

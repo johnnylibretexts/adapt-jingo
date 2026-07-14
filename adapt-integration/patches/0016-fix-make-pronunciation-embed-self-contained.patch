@@ -1,0 +1,102 @@
+From 2dd032f657dacfe11015813739f0a93959a9e8b1 Mon Sep 17 00:00:00 2001
+From: johnnylibretexts <264531926+johnnylibretexts@users.noreply.github.com>
+Date: Mon, 13 Jul 2026 19:04:45 -0700
+Subject: [PATCH 16/16] fix: make pronunciation embed self-contained
+
+---
+ .../questions/PronunciationQuestion.vue       |  3 +++
+ resources/views/spa.blade.php                 |  7 +++++++
+ tests/Feature/PronunciationEmbedShellTest.php | 21 +++++++++++++++++++
+ 3 files changed, 31 insertions(+)
+ create mode 100644 tests/Feature/PronunciationEmbedShellTest.php
+
+diff --git a/resources/js/components/questions/PronunciationQuestion.vue b/resources/js/components/questions/PronunciationQuestion.vue
+index 5cb1ad68a..1d77934b9 100644
+--- a/resources/js/components/questions/PronunciationQuestion.vue
++++ b/resources/js/components/questions/PronunciationQuestion.vue
+@@ -580,6 +580,9 @@ export default {
+ .pron-hint {
+   margin-bottom: 0;
+ }
++.pronunciation-question .text-muted {
++  color: #5f6368 !important;
++}
+ .pron-chips {
+   display: flex;
+   flex-wrap: wrap;
+diff --git a/resources/views/spa.blade.php b/resources/views/spa.blade.php
+index 19549c0e7..99aa915c4 100644
+--- a/resources/views/spa.blade.php
++++ b/resources/views/spa.blade.php
+@@ -1,4 +1,5 @@
+ @php
++  $isPronunciationEmbed = request()->is('embed/pronunciation');
+   $config = [
+       'appName' => config('app.name'),
+       'locale' => $locale = app()->getLocale(),
+@@ -28,15 +29,19 @@
+   <link rel="shortcut icon" type="image/png" href="{{ asset('assets/img/favicon.png') }}"/>
+   <title>{{ config('app.name') }}</title>
+   <link rel="stylesheet" href="{{ mix('dist/css/app.css') }}">
++  @unless($isPronunciationEmbed)
+   <script src="https://cdnjs.cloudflare.com/ajax/libs/iframe-resizer/4.2.11/iframeResizer.contentWindow.js"
+           integrity="sha512-RMBWitJB1ymY4l6xeYsFwoEgVCAnOWX/zL1gNwXjlUj78nZ8SVbJsZxbH/w0p2jDNraHkOW8rzQgcJ0LNSXWBA=="
+           crossorigin="anonymous"
+   ></script>
++  @endunless
+ </head>
+ <body>
+ <div id="app"></div>
++@unless($isPronunciationEmbed)
+ <div id="support-widget-container"></div>
+ <script src="https://cdn.libretexts.net/libretexts-support-widget.min.js"></script>
++@endunless
+ 
+ {{-- Global configuration object --}}
+ <script>
+@@ -45,6 +50,7 @@
+ </script>
+ {{-- Load the application scripts --}}
+ <script src="{{ mix('dist/js/app.js') }}"></script>
++@unless($isPronunciationEmbed)
+ <script type="text/x-mathjax-config">/*<![CDATA[*/
+   MathJax.Ajax.config.path["mhchem"] =
+             "https://cdnjs.cloudflare.com/ajax/libs/mathjax-mhchem/3.3.2";
+@@ -110,6 +116,7 @@ menuSettings: { zscale: "150%", zoom: "Double-Click" },
+   MathJax.Hub.Config(MathJaxConfig)
+ 
+ </script>
++@endunless
+ <script>   document.addEventListener('DOMContentLoaded', function (event) {
+   console.log('dom loaded')
+     if (window.self !== window.top) {
+diff --git a/tests/Feature/PronunciationEmbedShellTest.php b/tests/Feature/PronunciationEmbedShellTest.php
+new file mode 100644
+index 000000000..04d3788bb
+--- /dev/null
++++ b/tests/Feature/PronunciationEmbedShellTest.php
+@@ -0,0 +1,21 @@
++<?php
++
++namespace Tests\Feature;
++
++use Tests\TestCase;
++
++class PronunciationEmbedShellTest extends TestCase
++{
++    public function test_pronunciation_embed_omits_global_cdn_dependencies(): void
++    {
++        $response = $this->get(
++            '/embed/pronunciation?exercise_id=es-u1-l1-e1&lang=es&prompt=ala'
++        );
++
++        $response->assertOk();
++        $response->assertDontSee('cdnjs.cloudflare.com', false);
++        $response->assertDontSee('cdn.libretexts.net', false);
++        $response->assertSee('dist/css/app.css', false);
++        $response->assertSee('dist/js/app.js', false);
++    }
++}
+-- 
+2.41.0
+

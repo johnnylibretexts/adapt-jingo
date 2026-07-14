@@ -580,6 +580,9 @@ export default {
 .pron-hint {
   margin-bottom: 0;
 }
+.pronunciation-question .text-muted {
+  color: #5f6368 !important;
+}
 .pron-chips {
   display: flex;
   flex-wrap: wrap;

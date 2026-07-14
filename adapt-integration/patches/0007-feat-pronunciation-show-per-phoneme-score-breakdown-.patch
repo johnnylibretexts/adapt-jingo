@@ -1,7 +1,7 @@
 From 4fc702f57ebe32d7e32d72ef1ac26a974d78c4cd Mon Sep 17 00:00:00 2001
 From: johnnylibretexts <264531926+johnnylibretexts@users.noreply.github.com>
 Date: Tue, 7 Jul 2026 01:05:51 -0700
-Subject: [PATCH 07/15] feat(pronunciation): show per-phoneme score breakdown
+Subject: [PATCH 07/16] feat(pronunciation): show per-phoneme score breakdown
  (chips)
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8

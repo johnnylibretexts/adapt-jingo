@@ -59,9 +59,10 @@ Amazon Polly TTS voice is the one opt-in exception, and the default TTS engine i
    Point ADAPT at it with `PRONUNCIATION_TTS_URL`. Skip this and scoring still works — the
    button is just hidden. See [`tts/README.md`](tts/README.md).
 3. **Apply the ADAPT-side integration** — [`adapt-integration/`](adapt-integration/) packages
-   the ~13 ADAPT files (the `pronunciation` question type, the `PronunciationQuestion.vue`
+   the 14 ADAPT files (the `pronunciation` question type, the `PronunciationQuestion.vue`
    widget with Hear-it / practice-embed / word-level views, the DB migration, the
-   `libretexts:import-language-pack` command, the JWT/sync wiring) as a **15-patch series**
+   `libretexts:import-language-pack` command, the JWT/sync wiring, and the
+   self-contained accessible embed shell) as a **16-patch series**
    (`git am patches/*.patch`) plus clean copy-in snapshots. Full step-by-step +
    post-apply checklist in [`adapt-integration/INTEGRATION.md`](adapt-integration/INTEGRATION.md).
    Then `npm i` + rebuild the SPA, `php artisan migrate`, and set
