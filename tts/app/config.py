@@ -98,9 +98,16 @@ MP3_KBPS = os.environ.get("TTS_MP3_KBPS", "96")
 # Playback shaping. A single word at full speed sounds rushed for a learner, so
 # we slow synthesis and add a little silence around the clip. These values are
 # part of the cache key, so changing them transparently invalidates old clips.
-SPEED = float(os.environ.get("TTS_SPEED", "0.8"))        # <1 = slower, clearer
-PAD_LEAD_S = float(os.environ.get("TTS_PAD_LEAD_S", "0.12"))   # silence before
-PAD_TRAIL_S = float(os.environ.get("TTS_PAD_TRAIL_S", "0.30"))  # silence after
+# Named so the cache key can include them only when they differ from the
+# default (same idiom RATE uses) -- that keeps the documented invalidation
+# contract without rekeying every already-cached clip on the current settings.
+DEFAULT_SPEED = 0.8
+DEFAULT_PAD_LEAD_S = 0.12
+DEFAULT_PAD_TRAIL_S = 0.30
+
+SPEED = float(os.environ.get("TTS_SPEED", str(DEFAULT_SPEED)))        # <1 = slower, clearer
+PAD_LEAD_S = float(os.environ.get("TTS_PAD_LEAD_S", str(DEFAULT_PAD_LEAD_S)))   # silence before
+PAD_TRAIL_S = float(os.environ.get("TTS_PAD_TRAIL_S", str(DEFAULT_PAD_TRAIL_S)))  # silence after
 
 # Post-synthesis playback tempo applied to EVERY engine's audio via ffmpeg
 # `atempo` (pitch-preserving — it slows the delivery without deepening the voice).

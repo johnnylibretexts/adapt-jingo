@@ -4,6 +4,7 @@ The real TTS provider + ffmpeg are stubbed so the suite runs with no model
 download and no audio backend — we exercise validation, caching, and the
 lang->voice fallback, not the synthesis engine itself."""
 import importlib
+import os
 
 import numpy as np
 import pytest
@@ -131,3 +132,45 @@ def test_rate_changes_cache_key(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "RATE", 0.8)
     slower = main._clip_path("Mia", "es", "hola")
     assert base != slow != slower and base != slower
+
+
+def test_shaping_changes_cache_key(tmp_path, monkeypatch):
+    """config.py documents SPEED/PAD as part of the key: they change the audio
+    bytes, so altering them must invalidate old clips. Default values stay
+    un-suffixed so already-cached clips keep their key."""
+    monkeypatch.setenv("TTS_CACHE_DIR", str(tmp_path / "cache"))
+    from app import config, main
+    importlib.reload(config)
+    importlib.reload(main)
+
+    base = main._clip_path("Mia", "es", "hola")
+
+    monkeypatch.setattr(config, "SPEED", config.DEFAULT_SPEED + 0.1)
+    assert main._clip_path("Mia", "es", "hola") != base
+    monkeypatch.setattr(config, "SPEED", config.DEFAULT_SPEED)
+    assert main._clip_path("Mia", "es", "hola") == base
+
+    monkeypatch.setattr(config, "PAD_LEAD_S", config.DEFAULT_PAD_LEAD_S + 0.05)
+    assert main._clip_path("Mia", "es", "hola") != base
+    monkeypatch.setattr(config, "PAD_LEAD_S", config.DEFAULT_PAD_LEAD_S)
+
+    monkeypatch.setattr(config, "PAD_TRAIL_S", config.DEFAULT_PAD_TRAIL_S + 0.05)
+    assert main._clip_path("Mia", "es", "hola") != base
+
+
+def test_cache_place_script_key_matches_service(tmp_path, monkeypatch):
+    """The build-time placement script and the service must derive identical
+    keys — they previously each had their own copy and drifted, so every clip
+    the script placed on a Polly + TTS_RATE box was unreachable."""
+    monkeypatch.setenv("TTS_CACHE_DIR", str(tmp_path / "cache"))
+    from app import config, main
+    from app.clip_key import clip_key
+    importlib.reload(config)
+    importlib.reload(main)
+    monkeypatch.setattr(config, "TTS_ENGINE", "polly")
+    monkeypatch.setattr(config, "POLLY_ENGINE", "generative")
+    monkeypatch.setattr(config, "RATE", 0.9)
+
+    service_path = main._clip_path("Mia", "es", "hola")
+    script_key = clip_key("Mia", "es", "hola")
+    assert os.path.basename(service_path) == script_key + ".mp3"
