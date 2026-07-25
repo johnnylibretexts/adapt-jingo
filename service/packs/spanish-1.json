@@ -1,0 +1,984 @@
+{
+  "manifest": {
+    "course_title": "Spanish 1 — Sonidos y palabras",
+    "language": "es",
+    "version": "1.0.0"
+  },
+  "course_code": "SPAN-1",
+  "units": [
+    {
+      "id": "es-u1",
+      "title": "Sonidos y saludos",
+      "order": 1,
+      "lessons": [
+        {
+          "id": "es-u1-l1",
+          "title": "Las cinco vocales",
+          "order": 1,
+          "drills": [
+            {
+              "id": "es-u1-l1-e1",
+              "type": "pronunciation",
+              "prompt": "Escucha y repite: /a/ — «ala»",
+              "target_text": "ala",
+              "grading": "score",
+              "phonetics_record": {
+                "lang": "es",
+                "phones": [
+                  "a",
+                  "l",
+                  "a"
+                ],
+                "ids": [
+                  9,
+                  8,
+                  9
+                ],
+                "words": [
+                  {
+                    "start": 0,
+                    "len": 3,
+                    "phones": [
+                      "a",
+                      "l",
+                      "a"
+                    ]
+                  }
+                ],
+                "coverage": 1.0,
+                "unknown": [],
+                "espeak_voice": "es-419"
+              }
+            },
+            {
+              "id": "es-u1-l1-e2",
+              "type": "pronunciation",
+              "prompt": "/e/ — «eco»",
+              "target_text": "eco",
+              "grading": "completion",
+              "phonetics_record": {
+                "lang": "es",
+                "phones": [
+                  "e",
+                  "k",
+                  "o"
+                ],
+                "ids": [
+                  16,
+                  11,
+                  19
+                ],
+                "words": [
+                  {
+                    "start": 0,
+                    "len": 3,
+                    "phones": [
+                      "e",
+                      "k",
+                      "o"
+                    ]
+                  }
+                ],
+                "coverage": 1.0,
+                "unknown": [],
+                "espeak_voice": "es-419"
+              }
+            },
+            {
+              "id": "es-u1-l1-e3",
+              "type": "pronunciation",
+              "prompt": "/i/ — «iglú»",
+              "target_text": "iglú",
+              "grading": "completion",
+              "phonetics_record": {
+                "lang": "es",
+                "phones": [
+                  "i",
+                  "ɣ",
+                  "l",
+                  "u"
+                ],
+                "ids": [
+                  10,
+                  57,
+                  8,
+                  34
+                ],
+                "words": [
+                  {
+                    "start": 0,
+                    "len": 4,
+                    "phones": [
+                      "i",
+                      "ɣ",
+                      "l",
+                      "u"
+                    ]
+                  }
+                ],
+                "coverage": 1.0,
+                "unknown": [],
+                "espeak_voice": "es-419"
+              }
+            },
+            {
+              "id": "es-u1-l1-e4",
+              "type": "pronunciation",
+              "prompt": "/o/ — «oso»",
+              "target_text": "oso",
+              "grading": "completion",
+              "phonetics_record": {
+                "lang": "es",
+                "phones": [
+                  "o",
+                  "s",
+                  "o"
+                ],
+                "ids": [
+                  19,
+                  5,
+                  19
+                ],
+                "words": [
+                  {
+                    "start": 0,
+                    "len": 3,
+                    "phones": [
+                      "o",
+                      "s",
+                      "o"
+                    ]
+                  }
+                ],
+                "coverage": 1.0,
+                "unknown": [],
+                "espeak_voice": "es-419"
+              }
+            },
+            {
+              "id": "es-u1-l1-e5",
+              "type": "pronunciation",
+              "prompt": "/u/ — «uva»",
+              "target_text": "uva",
+              "grading": "completion",
+              "phonetics_record": {
+                "lang": "es",
+                "phones": [
+                  "u",
+                  "β",
+                  "a"
+                ],
+                "ids": [
+                  34,
+                  45,
+                  9
+                ],
+                "words": [
+                  {
+                    "start": 0,
+                    "len": 3,
+                    "phones": [
+                      "u",
+                      "β",
+                      "a"
+                    ]
+                  }
+                ],
+                "coverage": 1.0,
+                "unknown": [],
+                "espeak_voice": "es-419"
+              }
+            },
+            {
+              "id": "es-u1-l1-q1",
+              "type": "qti-mc",
+              "prompt": "¿Cómo se dice «hello»?",
+              "qti_spec": {
+                "type": "multiple_choice",
+                "prompt": "¿Cómo se dice «hello»?",
+                "choices": [
+                  [
+                    "hola",
+                    true
+                  ],
+                  [
+                    "adiós",
+                    false
+                  ],
+                  [
+                    "gracias",
+                    false
+                  ],
+                  [
+                    "perdón",
+                    false
+                  ]
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "es-u1-l2",
+          "title": "/r/ y /ɾ/",
+          "order": 2,
+          "drills": [
+            {
+              "id": "es-u1-l2-e1",
+              "type": "pronunciation",
+              "prompt": "Repite: «perro» (rr vibrante)",
+              "target_text": "perro",
+              "grading": "completion",
+              "phonetics_record": {
+                "lang": "es",
+                "phones": [
+                  "p",
+                  "e",
+                  "r",
+                  "o"
+                ],
+                "ids": [
+                  18,
+                  16,
+                  31,
+                  19
+                ],
+                "words": [
+                  {
+                    "start": 0,
+                    "len": 4,
+                    "phones": [
+                      "p",
+                      "e",
+                      "r",
+                      "o"
+                    ]
+                  }
+                ],
+                "coverage": 1.0,
+                "unknown": [],
+                "espeak_voice": "es-419"
+              }
+            },
+            {
+              "id": "es-u1-l2-e2",
+              "type": "pronunciation",
+              "prompt": "Repite: «pero» (r simple)",
+              "target_text": "pero",
+              "grading": "completion",
+              "phonetics_record": {
+                "lang": "es",
+                "phones": [
+                  "p",
+                  "e",
+                  "ɾ",
+                  "o"
+                ],
+                "ids": [
+                  18,
+                  16,
+                  15,
+                  19
+                ],
+                "words": [
+                  {
+                    "start": 0,
+                    "len": 4,
+                    "phones": [
+                      "p",
+                      "e",
+                      "ɾ",
+                      "o"
+                    ]
+                  }
+                ],
+                "coverage": 1.0,
+                "unknown": [],
+                "espeak_voice": "es-419"
+              }
+            },
+            {
+              "id": "es-u1-l2-q1",
+              "type": "qti-mc",
+              "prompt": "¿Cuánto es 3 + 2?",
+              "qti_spec": {
+                "type": "multiple_choice",
+                "prompt": "¿Cuánto es 3 + 2?",
+                "choices": [
+                  [
+                    "5",
+                    true
+                  ],
+                  [
+                    "4",
+                    false
+                  ],
+                  [
+                    "6",
+                    false
+                  ]
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "es-u1-l3",
+          "title": "Práctica: palabras y frases",
+          "order": 3,
+          "drills": [
+            {
+              "id": "es-u1-l3-e1",
+              "type": "pronunciation",
+              "prompt": "Escucha y repite: «gato» — cat",
+              "target_text": "gato",
+              "grading": "score",
+              "phonetics_record": {
+                "lang": "es",
+                "phones": [
+                  "ɡ",
+                  "a",
+                  "t",
+                  "o"
+                ],
+                "ids": [
+                  35,
+                  9,
+                  6,
+                  19
+                ],
+                "words": [
+                  {
+                    "start": 0,
+                    "len": 4,
+                    "phones": [
+                      "ɡ",
+                      "a",
+                      "t",
+                      "o"
+                    ]
+                  }
+                ],
+                "coverage": 1.0,
+                "unknown": [],
+                "espeak_voice": "es-419"
+              }
+            },
+            {
+              "id": "es-u1-l3-e2",
+              "type": "pronunciation",
+              "prompt": "Escucha y repite: «casa» — house",
+              "target_text": "casa",
+              "grading": "score",
+              "phonetics_record": {
+                "lang": "es",
+                "phones": [
+                  "k",
+                  "a",
+                  "s",
+                  "a"
+                ],
+                "ids": [
+                  11,
+                  9,
+                  5,
+                  9
+                ],
+                "words": [
+                  {
+                    "start": 0,
+                    "len": 4,
+                    "phones": [
+                      "k",
+                      "a",
+                      "s",
+                      "a"
+                    ]
+                  }
+                ],
+                "coverage": 1.0,
+                "unknown": [],
+                "espeak_voice": "es-419"
+              }
+            },
+            {
+              "id": "es-u1-l3-e3",
+              "type": "pronunciation",
+              "prompt": "Escucha y repite: «libro» — book",
+              "target_text": "libro",
+              "grading": "score",
+              "phonetics_record": {
+                "lang": "es",
+                "phones": [
+                  "l",
+                  "i",
+                  "β",
+                  "ɾ",
+                  "o"
+                ],
+                "ids": [
+                  8,
+                  10,
+                  45,
+                  15,
+                  19
+                ],
+                "words": [
+                  {
+                    "start": 0,
+                    "len": 5,
+                    "phones": [
+                      "l",
+                      "i",
+                      "β",
+                      "ɾ",
+                      "o"
+                    ]
+                  }
+                ],
+                "coverage": 1.0,
+                "unknown": [],
+                "espeak_voice": "es-419"
+              }
+            },
+            {
+              "id": "es-u1-l3-e4",
+              "type": "pronunciation",
+              "prompt": "Escucha y repite: «mesa» — table",
+              "target_text": "mesa",
+              "grading": "score",
+              "phonetics_record": {
+                "lang": "es",
+                "phones": [
+                  "m",
+                  "e",
+                  "s",
+                  "a"
+                ],
+                "ids": [
+                  13,
+                  16,
+                  5,
+                  9
+                ],
+                "words": [
+                  {
+                    "start": 0,
+                    "len": 4,
+                    "phones": [
+                      "m",
+                      "e",
+                      "s",
+                      "a"
+                    ]
+                  }
+                ],
+                "coverage": 1.0,
+                "unknown": [],
+                "espeak_voice": "es-419"
+              }
+            },
+            {
+              "id": "es-u1-l3-e5",
+              "type": "pronunciation",
+              "prompt": "Escucha y repite: «agua» — water",
+              "target_text": "agua",
+              "grading": "score",
+              "phonetics_record": {
+                "lang": "es",
+                "phones": [
+                  "a",
+                  "ɣ",
+                  "w",
+                  "a"
+                ],
+                "ids": [
+                  9,
+                  57,
+                  32,
+                  9
+                ],
+                "words": [
+                  {
+                    "start": 0,
+                    "len": 4,
+                    "phones": [
+                      "a",
+                      "ɣ",
+                      "w",
+                      "a"
+                    ]
+                  }
+                ],
+                "coverage": 1.0,
+                "unknown": [],
+                "espeak_voice": "es-419"
+              }
+            },
+            {
+              "id": "es-u1-l3-e6",
+              "type": "pronunciation",
+              "prompt": "Escucha y repite: «sol» — sun",
+              "target_text": "sol",
+              "grading": "score",
+              "phonetics_record": {
+                "lang": "es",
+                "phones": [
+                  "s",
+                  "o",
+                  "l"
+                ],
+                "ids": [
+                  5,
+                  19,
+                  8
+                ],
+                "words": [
+                  {
+                    "start": 0,
+                    "len": 3,
+                    "phones": [
+                      "s",
+                      "o",
+                      "l"
+                    ]
+                  }
+                ],
+                "coverage": 1.0,
+                "unknown": [],
+                "espeak_voice": "es-419"
+              }
+            },
+            {
+              "id": "es-u1-l3-e7",
+              "type": "pronunciation",
+              "prompt": "Escucha y repite: «buenos días» — good morning",
+              "target_text": "buenos días",
+              "grading": "score",
+              "phonetics_record": {
+                "lang": "es",
+                "phones": [
+                  "b",
+                  "w",
+                  "e",
+                  "n",
+                  "o",
+                  "s",
+                  "ð",
+                  "i",
+                  "a",
+                  "s"
+                ],
+                "ids": [
+                  26,
+                  32,
+                  16,
+                  4,
+                  19,
+                  5,
+                  22,
+                  10,
+                  9,
+                  5
+                ],
+                "words": [
+                  {
+                    "start": 0,
+                    "len": 6,
+                    "phones": [
+                      "b",
+                      "w",
+                      "e",
+                      "n",
+                      "o",
+                      "s"
+                    ]
+                  },
+                  {
+                    "start": 6,
+                    "len": 4,
+                    "phones": [
+                      "ð",
+                      "i",
+                      "a",
+                      "s"
+                    ]
+                  }
+                ],
+                "coverage": 1.0,
+                "unknown": [],
+                "espeak_voice": "es-419"
+              }
+            },
+            {
+              "id": "es-u1-l3-e8",
+              "type": "pronunciation",
+              "prompt": "Escucha y repite: «muchas gracias» — thank you very much",
+              "target_text": "muchas gracias",
+              "grading": "score",
+              "phonetics_record": {
+                "lang": "es",
+                "phones": [
+                  "m",
+                  "u",
+                  "tʃ",
+                  "a",
+                  "s",
+                  "ɣ",
+                  "ɾ",
+                  "a",
+                  "s",
+                  "j",
+                  "a",
+                  "s"
+                ],
+                "ids": [
+                  13,
+                  34,
+                  66,
+                  9,
+                  5,
+                  57,
+                  15,
+                  9,
+                  5,
+                  24,
+                  9,
+                  5
+                ],
+                "words": [
+                  {
+                    "start": 0,
+                    "len": 5,
+                    "phones": [
+                      "m",
+                      "u",
+                      "tʃ",
+                      "a",
+                      "s"
+                    ]
+                  },
+                  {
+                    "start": 5,
+                    "len": 7,
+                    "phones": [
+                      "ɣ",
+                      "ɾ",
+                      "a",
+                      "s",
+                      "j",
+                      "a",
+                      "s"
+                    ]
+                  }
+                ],
+                "coverage": 1.0,
+                "unknown": [],
+                "espeak_voice": "es-419"
+              }
+            },
+            {
+              "id": "es-u1-l3-e9",
+              "type": "pronunciation",
+              "prompt": "Escucha y repite: «me llamo Ana» — my name is Ana",
+              "target_text": "me llamo Ana",
+              "grading": "score",
+              "phonetics_record": {
+                "lang": "es",
+                "phones": [
+                  "m",
+                  "e",
+                  "ʝ",
+                  "a",
+                  "m",
+                  "o",
+                  "a",
+                  "n",
+                  "a"
+                ],
+                "ids": [
+                  13,
+                  16,
+                  221,
+                  9,
+                  13,
+                  19,
+                  9,
+                  4,
+                  9
+                ],
+                "words": [
+                  {
+                    "start": 0,
+                    "len": 2,
+                    "phones": [
+                      "m",
+                      "e"
+                    ]
+                  },
+                  {
+                    "start": 2,
+                    "len": 4,
+                    "phones": [
+                      "ʝ",
+                      "a",
+                      "m",
+                      "o"
+                    ]
+                  },
+                  {
+                    "start": 6,
+                    "len": 3,
+                    "phones": [
+                      "a",
+                      "n",
+                      "a"
+                    ]
+                  }
+                ],
+                "coverage": 1.0,
+                "unknown": [],
+                "espeak_voice": "es-419"
+              }
+            },
+            {
+              "id": "es-u1-l3-e10",
+              "type": "pronunciation",
+              "prompt": "Escucha y repite: «¿cómo estás?» — how are you?",
+              "target_text": "¿cómo estás?",
+              "grading": "score",
+              "phonetics_record": {
+                "lang": "es",
+                "phones": [
+                  "k",
+                  "o",
+                  "m",
+                  "o",
+                  "e",
+                  "s",
+                  "t",
+                  "a",
+                  "s"
+                ],
+                "ids": [
+                  11,
+                  19,
+                  13,
+                  19,
+                  16,
+                  5,
+                  6,
+                  9,
+                  5
+                ],
+                "words": [
+                  {
+                    "start": 0,
+                    "len": 4,
+                    "phones": [
+                      "k",
+                      "o",
+                      "m",
+                      "o"
+                    ]
+                  },
+                  {
+                    "start": 4,
+                    "len": 5,
+                    "phones": [
+                      "e",
+                      "s",
+                      "t",
+                      "a",
+                      "s"
+                    ]
+                  }
+                ],
+                "coverage": 1.0,
+                "unknown": [],
+                "espeak_voice": "es-419"
+              }
+            },
+            {
+              "id": "es-u1-l3-e11",
+              "type": "pronunciation",
+              "prompt": "Escucha y repite: «hasta luego» — see you later",
+              "target_text": "hasta luego",
+              "grading": "score",
+              "phonetics_record": {
+                "lang": "es",
+                "phones": [
+                  "a",
+                  "s",
+                  "t",
+                  "a",
+                  "l",
+                  "u",
+                  "e",
+                  "ɣ",
+                  "o"
+                ],
+                "ids": [
+                  9,
+                  5,
+                  6,
+                  9,
+                  8,
+                  34,
+                  16,
+                  57,
+                  19
+                ],
+                "words": [
+                  {
+                    "start": 0,
+                    "len": 4,
+                    "phones": [
+                      "a",
+                      "s",
+                      "t",
+                      "a"
+                    ]
+                  },
+                  {
+                    "start": 4,
+                    "len": 5,
+                    "phones": [
+                      "l",
+                      "u",
+                      "e",
+                      "ɣ",
+                      "o"
+                    ]
+                  }
+                ],
+                "coverage": 1.0,
+                "unknown": [],
+                "espeak_voice": "es-419"
+              }
+            },
+            {
+              "id": "es-u1-l3-e12",
+              "type": "pronunciation",
+              "prompt": "Escucha y repite: «mucho gusto» — nice to meet you",
+              "target_text": "mucho gusto",
+              "grading": "score",
+              "phonetics_record": {
+                "lang": "es",
+                "phones": [
+                  "m",
+                  "u",
+                  "tʃ",
+                  "o",
+                  "ɣ",
+                  "u",
+                  "s",
+                  "t",
+                  "o"
+                ],
+                "ids": [
+                  13,
+                  34,
+                  66,
+                  19,
+                  57,
+                  34,
+                  5,
+                  6,
+                  19
+                ],
+                "words": [
+                  {
+                    "start": 0,
+                    "len": 4,
+                    "phones": [
+                      "m",
+                      "u",
+                      "tʃ",
+                      "o"
+                    ]
+                  },
+                  {
+                    "start": 4,
+                    "len": 5,
+                    "phones": [
+                      "ɣ",
+                      "u",
+                      "s",
+                      "t",
+                      "o"
+                    ]
+                  }
+                ],
+                "coverage": 1.0,
+                "unknown": [],
+                "espeak_voice": "es-419"
+              }
+            }
+          ]
+        }
+      ],
+      "exam": {
+        "title": "Examen Unidad 1",
+        "questions": [
+          {
+            "exercise_id": "es-u1-l1-e1",
+            "points": 5
+          },
+          {
+            "exercise_id": "es-u1-l1-q1",
+            "points": 3
+          },
+          {
+            "exercise_id": "es-u1-l3-e1",
+            "points": 5
+          },
+          {
+            "exercise_id": "es-u1-l3-e2",
+            "points": 5
+          },
+          {
+            "exercise_id": "es-u1-l3-e3",
+            "points": 5
+          },
+          {
+            "exercise_id": "es-u1-l3-e4",
+            "points": 5
+          },
+          {
+            "exercise_id": "es-u1-l3-e5",
+            "points": 5
+          },
+          {
+            "exercise_id": "es-u1-l3-e6",
+            "points": 5
+          },
+          {
+            "exercise_id": "es-u1-l3-e7",
+            "points": 5
+          },
+          {
+            "exercise_id": "es-u1-l3-e8",
+            "points": 5
+          },
+          {
+            "exercise_id": "es-u1-l3-e9",
+            "points": 5
+          },
+          {
+            "exercise_id": "es-u1-l3-e10",
+            "points": 5
+          },
+          {
+            "exercise_id": "es-u1-l3-e11",
+            "points": 5
+          },
+          {
+            "exercise_id": "es-u1-l3-e12",
+            "points": 5
+          }
+        ]
+      }
+    }
+  ]
+}
