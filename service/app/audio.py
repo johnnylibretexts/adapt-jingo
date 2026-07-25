@@ -51,7 +51,10 @@ def download_and_normalize(audio_url: str, dest_dir: str) -> str:
     os.close(fd)
     wav_path = in_path.rsplit(".", 1)[0] + ".wav"
     try:
-        with httpx.stream("GET", audio_url, timeout=30.0, follow_redirects=True) as r:
+        # follow_redirects=False: _guard_audio_url only vets the URL we were
+        # given. With automatic redirects an allowlisted origin could bounce us
+        # to an internal host and the guard would never see the final target.
+        with httpx.stream("GET", audio_url, timeout=30.0, follow_redirects=False) as r:
             r.raise_for_status()
             # Early exit on a declared oversized body, before reading any of it.
             # The streaming counter below is the real guard (Content-Length is
@@ -93,6 +96,12 @@ def download_and_normalize(audio_url: str, dest_dir: str) -> str:
         # unexpected exception in the caller instead of 'audio_unreachable'.
         if not os.path.exists(wav_path):
             raise AudioFetchError("ffmpeg produced no output")
+        # -t caps the transcode at max+1s; verify the result like
+        # normalize_upload does, so an over-length clip cannot reach the engine.
+        seconds = os.path.getsize(wav_path) / (16000 * 2)
+        if seconds > _MAX_AUDIO_SECONDS:
+            raise AudioFetchError(
+                f"audio too long: {seconds:.1f}s > {_MAX_AUDIO_SECONDS}s")
         return wav_path
     except Exception:
         if os.path.exists(wav_path):
