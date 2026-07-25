@@ -53,6 +53,14 @@ def download_and_normalize(audio_url: str, dest_dir: str) -> str:
     try:
         with httpx.stream("GET", audio_url, timeout=30.0, follow_redirects=True) as r:
             r.raise_for_status()
+            # Early exit on a declared oversized body, before reading any of it.
+            # The streaming counter below is the real guard (Content-Length is
+            # absent on chunked responses and can lie), but this avoids pulling
+            # an obviously-too-large body into memory one chunk at a time.
+            declared = r.headers.get("content-length")
+            if declared and declared.isdigit() and int(declared) > _MAX_DOWNLOAD_BYTES:
+                raise AudioFetchError(
+                    f"audio exceeds {_MAX_DOWNLOAD_BYTES} bytes")
             # Cap the streamed body: the URL is remote and only partially
             # trusted, so an oversized/endless response must not fill /tmp.
             written = 0
@@ -79,6 +87,12 @@ def download_and_normalize(audio_url: str, dest_dir: str) -> str:
             )
         except subprocess.TimeoutExpired:
             raise AudioFetchError(f"ffmpeg timed out after {_FFMPEG_TIMEOUT_S}s")
+        # Same belt-and-braces check normalize_upload does: ffmpeg can exit 0
+        # without writing the output (e.g. a demux failure that doesn't set a
+        # non-zero status). Returning a nonexistent path would surface as an
+        # unexpected exception in the caller instead of 'audio_unreachable'.
+        if not os.path.exists(wav_path):
+            raise AudioFetchError("ffmpeg produced no output")
         return wav_path
     except Exception:
         if os.path.exists(wav_path):

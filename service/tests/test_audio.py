@@ -6,6 +6,8 @@ from app.audio import download_and_normalize, AudioFetchError
 class _StubResp:
     """Minimal httpx.stream stand-in yielding fixed chunks."""
 
+    headers = {}
+
     def __init__(self, chunks):
         self._chunks = chunks
 
@@ -31,6 +33,7 @@ def test_normalize_produces_16k_mono_s16(monkeypatch, tmp_path):
     # stub httpx so "download" = copy the local file
     import app.audio as A
     class _Resp:
+        headers = {}  # real httpx responses always carry headers
         def __enter__(self): return self
         def __exit__(self, *a): pass
         def raise_for_status(self): pass
@@ -76,12 +79,18 @@ def test_host_allowlist_blocks_and_allows(monkeypatch, tmp_path):
 
     # allowed host: guard passes, so we reach (and stub) the actual fetch
     class _Resp:
+        headers = {}  # real httpx responses always carry headers
         def __enter__(self): return self
         def __exit__(self, *a): pass
         def raise_for_status(self): pass
         def iter_raw(self): return iter([b"\x00\x00"])
     monkeypatch.setattr(A.httpx, "stream", lambda method, url, **kw: _Resp())
-    monkeypatch.setattr(A, "subprocess", type("S", (), {"run": staticmethod(lambda *a, **kw: None)}))
+    # the stub must actually produce the output file: download_and_normalize
+    # now verifies ffmpeg wrote something rather than trusting exit status.
+    monkeypatch.setattr(A, "subprocess", type("S", (), {
+        "run": staticmethod(lambda cmd, **kw: open(cmd[-1], "wb").close()),
+        "TimeoutExpired": subprocess.TimeoutExpired,
+    }))
     wav = download_and_normalize("http://minio:9000/bucket/x.bin", str(tmp_path / "out"))
     assert wav.endswith(".wav")
 
@@ -148,11 +157,44 @@ def test_no_allowlist_env_allows_any_host(monkeypatch, tmp_path):
     monkeypatch.delenv("JINGO_AUDIO_HOST_ALLOWLIST", raising=False)
 
     class _Resp:
+        headers = {}  # real httpx responses always carry headers
         def __enter__(self): return self
         def __exit__(self, *a): pass
         def raise_for_status(self): pass
         def iter_raw(self): return iter([b"\x00\x00"])
     monkeypatch.setattr(A.httpx, "stream", lambda method, url, **kw: _Resp())
-    monkeypatch.setattr(A, "subprocess", type("S", (), {"run": staticmethod(lambda *a, **kw: None)}))
+    # the stub must actually produce the output file: download_and_normalize
+    # now verifies ffmpeg wrote something rather than trusting exit status.
+    monkeypatch.setattr(A, "subprocess", type("S", (), {
+        "run": staticmethod(lambda cmd, **kw: open(cmd[-1], "wb").close()),
+        "TimeoutExpired": subprocess.TimeoutExpired,
+    }))
     wav = download_and_normalize("http://10.0.0.5:9000/bucket/x.bin", str(tmp_path / "out"))
     assert wav.endswith(".wav")
+
+def test_download_rejects_declared_oversized_content_length(monkeypatch, tmp_path):
+    # Early exit before reading the body at all, so an obviously-too-large
+    # response is not pulled in chunk by chunk.
+    import app.audio as A
+    monkeypatch.setattr(A, "_MAX_DOWNLOAD_BYTES", 10)
+
+    class _Resp(_StubResp):
+        headers = {"content-length": "999999"}
+
+        def iter_raw(self):
+            raise AssertionError("must not read a declared-oversized body")
+
+    monkeypatch.setattr(A.httpx, "stream", lambda m, u, **kw: _Resp([]))
+    with pytest.raises(AudioFetchError):
+        download_and_normalize("http://minio:9000/bucket/x.bin", str(tmp_path / "out"))
+
+
+def test_download_errors_when_ffmpeg_exits_zero_without_output(monkeypatch, tmp_path):
+    # ffmpeg can exit 0 without writing the WAV; returning that path would
+    # surface as an unexpected exception rather than 'audio_unreachable'.
+    import app.audio as A
+    monkeypatch.setattr(A.httpx, "stream",
+                        lambda m, u, **kw: _StubResp([b"\x00\x00"]))
+    monkeypatch.setattr(A.subprocess, "run", lambda *a, **kw: None)  # writes nothing
+    with pytest.raises(AudioFetchError, match="no output"):
+        download_and_normalize("http://minio:9000/bucket/x.bin", str(tmp_path / "out"))
