@@ -15,6 +15,15 @@ class AudioFetchError(Exception):
     'audio_unreachable' keeps working unchanged."""
 
 
+# Resource caps for the download path. Read from the environment here (rather
+# than threaded through the signature) so existing callers and their test
+# monkeypatches keep working -- same idiom _guard_audio_url already uses.
+# JINGO_ENGINE_MAX_AUDIO_SECONDS is the same var config.MAX_AUDIO_SECONDS reads.
+_MAX_DOWNLOAD_BYTES = int(os.environ.get("JINGO_MAX_DOWNLOAD_BYTES", str(25_000_000)))
+_MAX_AUDIO_SECONDS = float(os.environ.get("JINGO_ENGINE_MAX_AUDIO_SECONDS", "20"))
+_FFMPEG_TIMEOUT_S = float(os.environ.get("JINGO_FFMPEG_TIMEOUT_S", "60"))
+
+
 def _guard_audio_url(audio_url: str) -> None:
     """SSRF guard, run before any network I/O.
 
@@ -44,15 +53,32 @@ def download_and_normalize(audio_url: str, dest_dir: str) -> str:
     try:
         with httpx.stream("GET", audio_url, timeout=30.0, follow_redirects=True) as r:
             r.raise_for_status()
+            # Cap the streamed body: the URL is remote and only partially
+            # trusted, so an oversized/endless response must not fill /tmp.
+            written = 0
             with open(in_path, "wb") as f:
                 for chunk in r.iter_raw():
+                    written += len(chunk)
+                    if written > _MAX_DOWNLOAD_BYTES:
+                        raise AudioFetchError(
+                            f"audio exceeds {_MAX_DOWNLOAD_BYTES} bytes")
                     f.write(chunk)
-        subprocess.run(
-            ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-             "-i", in_path, "-ac", "1", "-ar", "16000",
-             "-sample_fmt", "s16", wav_path],
-            check=True,
-        )
+        try:
+            subprocess.run(
+                # Mirrors normalize_upload's hardening:
+                # -protocol_whitelist keeps a crafted playlist/concat input from
+                #   reaching back out over the network; -t hard-caps the OUTPUT
+                #   duration so a decompression bomb can't write a huge WAV.
+                ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+                 "-protocol_whitelist", "file,pipe", "-i", in_path,
+                 "-t", str(_MAX_AUDIO_SECONDS + 1),
+                 "-ac", "1", "-ar", "16000",
+                 "-sample_fmt", "s16", wav_path],
+                check=True,
+                timeout=_FFMPEG_TIMEOUT_S,
+            )
+        except subprocess.TimeoutExpired:
+            raise AudioFetchError(f"ffmpeg timed out after {_FFMPEG_TIMEOUT_S}s")
         return wav_path
     except Exception:
         if os.path.exists(wav_path):
@@ -88,6 +114,7 @@ def normalize_upload(data: bytes, dest_dir: str, max_seconds: float) -> str:
              "-t", str(max_seconds + 1),
              "-ac", "1", "-ar", "16000", "-sample_fmt", "s16", wav_path],
             capture_output=True,
+            timeout=_FFMPEG_TIMEOUT_S,
         )
         if proc.returncode != 0 or not os.path.exists(wav_path):
             raise AudioFetchError("could not decode audio")

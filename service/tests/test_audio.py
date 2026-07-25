@@ -1,6 +1,18 @@
-import struct, wave
+import struct, subprocess, wave
 import pytest
 from app.audio import download_and_normalize, AudioFetchError
+
+
+class _StubResp:
+    """Minimal httpx.stream stand-in yielding fixed chunks."""
+
+    def __init__(self, chunks):
+        self._chunks = chunks
+
+    def __enter__(self): return self
+    def __exit__(self, *a): pass
+    def raise_for_status(self): pass
+    def iter_raw(self): return iter(self._chunks)
 
 
 def _make_wav(path, sr=44100, channels=2, sample_fmt="s16"):
@@ -72,6 +84,61 @@ def test_host_allowlist_blocks_and_allows(monkeypatch, tmp_path):
     monkeypatch.setattr(A, "subprocess", type("S", (), {"run": staticmethod(lambda *a, **kw: None)}))
     wav = download_and_normalize("http://minio:9000/bucket/x.bin", str(tmp_path / "out"))
     assert wav.endswith(".wav")
+
+
+def test_download_rejects_oversized_body(monkeypatch, tmp_path):
+    # The remote body is only partially trusted: an oversized/endless response
+    # must be cut off mid-stream rather than being allowed to fill /tmp.
+    import app.audio as A
+    monkeypatch.setattr(A, "_MAX_DOWNLOAD_BYTES", 10)
+    monkeypatch.setattr(A.httpx, "stream",
+                        lambda m, u, **kw: _StubResp([b"x" * 8, b"x" * 8]))
+
+    def _boom(*a, **kw):
+        raise AssertionError("must not transcode an over-cap download")
+    monkeypatch.setattr(A.subprocess, "run", _boom)
+
+    with pytest.raises(AudioFetchError):
+        download_and_normalize("http://minio:9000/bucket/x.bin", str(tmp_path / "out"))
+
+
+def test_download_ffmpeg_timeout_maps_to_audiofetcherror(monkeypatch, tmp_path):
+    # A hung ffmpeg must surface as AudioFetchError so main.py's handler maps it
+    # to 'audio_unreachable' (completion credit) rather than wedging the worker.
+    import app.audio as A
+    monkeypatch.setattr(A.httpx, "stream",
+                        lambda m, u, **kw: _StubResp([b"\x00\x00"]))
+
+    def _timeout(*a, **kw):
+        raise subprocess.TimeoutExpired(cmd="ffmpeg", timeout=1)
+    monkeypatch.setattr(A.subprocess, "run", _timeout)
+
+    with pytest.raises(AudioFetchError):
+        download_and_normalize("http://minio:9000/bucket/x.bin", str(tmp_path / "out"))
+
+
+def test_download_ffmpeg_invocation_is_hardened(monkeypatch, tmp_path):
+    # Same hardening normalize_upload already had: restricted protocols, a
+    # capped output duration, and a finite subprocess timeout.
+    import app.audio as A
+    captured = {}
+    monkeypatch.setattr(A.httpx, "stream",
+                        lambda m, u, **kw: _StubResp([b"\x00\x00"]))
+
+    def _run(cmd, **kw):
+        captured["cmd"] = cmd
+        captured["kw"] = kw
+        open(cmd[-1], "wb").close()  # ffmpeg would have written the wav
+        return None
+    monkeypatch.setattr(A.subprocess, "run", _run)
+
+    download_and_normalize("http://minio:9000/bucket/x.bin", str(tmp_path / "out"))
+
+    cmd = captured["cmd"]
+    assert "-protocol_whitelist" in cmd
+    assert cmd[cmd.index("-protocol_whitelist") + 1] == "file,pipe"
+    assert "-t" in cmd
+    assert captured["kw"].get("timeout")
 
 
 def test_no_allowlist_env_allows_any_host(monkeypatch, tmp_path):

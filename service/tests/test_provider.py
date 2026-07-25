@@ -68,6 +68,27 @@ def test_get_rejects_path_traversal_in_language(tmp_path):
     assert prov.get("a/b", "x") is None
 
 
+def test_tag_map_rejects_path_traversal_in_language(tmp_path):
+    # tag_map() interpolates `language` into a path exactly like get() does, so
+    # it needs the same guard. Plant a tag-map-shaped file outside records_dir
+    # and prove the traversal that would reach it returns the {} fallback.
+    records_dir = tmp_path / "records"
+    (records_dir / "tag_map").mkdir(parents=True)
+    _write(tmp_path, "leak.json", {"language": "es", "map": {"leaked": "yes"}})
+    prov = JsonPhoneticsProvider(records_dir=str(records_dir))
+    assert prov.tag_map("../../leak") == {}
+    assert prov.tag_map("..") == {}
+    assert prov.tag_map(".") == {}
+    assert prov.tag_map("a/b") == {}
+    assert prov.tag_map("a\\b") == {}
+
+
+def test_tag_map_still_resolves_normal_language(tmp_path):
+    _write(tmp_path, "tag_map/fr.json", {"language": "fr", "map": {"ʁ": "uvular-r"}})
+    prov = JsonPhoneticsProvider(records_dir=str(tmp_path))
+    assert prov.tag_map("fr") == {"ʁ": "uvular-r"}
+
+
 def test_get_still_resolves_normal_id(tmp_path):
     _write(tmp_path, "es/es-u1-l1-e1.json", {
         "lang": "es", "phones": ["a"], "ids": [5],

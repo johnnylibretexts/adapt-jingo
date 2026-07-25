@@ -42,6 +42,11 @@ class JsonPhoneticsProvider:
             return json.load(f)
 
     def tag_map(self, language: str) -> Dict[str, Optional[str]]:
+        # Same guard as get(): language comes from the request body, so it must
+        # never be interpolated into a path unvalidated. {} is the existing
+        # "no tag map" fallback, so invalid ids degrade exactly like a miss.
+        if not _is_safe_id(language):
+            return {}
         path = self.records_dir / "tag_map" / f"{language}.json"
         if not path.exists():
             return {}
