@@ -10,6 +10,7 @@ import time
 from collections import defaultdict
 
 from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -205,11 +206,16 @@ async def practice_score(
     wav_path = None
     try:
         try:
-            wav_path = normalize_upload(data, "/tmp/jingo", config.MAX_AUDIO_SECONDS)
+            # ffmpeg transcode and engine scoring are both blocking and can take
+            # seconds; run them off the event loop so one practice submission
+            # can't stall every other request on this worker.
+            wav_path = await run_in_threadpool(
+                normalize_upload, data, "/tmp/jingo", config.MAX_AUDIO_SECONDS)
         except Exception as exc:
             raise HTTPException(status_code=400, detail=str(exc))
         try:
-            payload = _engine.score_exercise(wav_path, language, exercise_id, _provider)
+            payload = await run_in_threadpool(
+                _engine.score_exercise, wav_path, language, exercise_id, _provider)
         except (ValueError, RuntimeError):
             raise HTTPException(status_code=422, detail="unscoreable")
         if payload is None:

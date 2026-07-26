@@ -15,6 +15,15 @@ class AudioFetchError(Exception):
     'audio_unreachable' keeps working unchanged."""
 
 
+# Resource caps for the download path. Read from the environment here (rather
+# than threaded through the signature) so existing callers and their test
+# monkeypatches keep working -- same idiom _guard_audio_url already uses.
+# JINGO_ENGINE_MAX_AUDIO_SECONDS is the same var config.MAX_AUDIO_SECONDS reads.
+_MAX_DOWNLOAD_BYTES = int(os.environ.get("JINGO_MAX_DOWNLOAD_BYTES", str(25_000_000)))
+_MAX_AUDIO_SECONDS = float(os.environ.get("JINGO_ENGINE_MAX_AUDIO_SECONDS", "20"))
+_FFMPEG_TIMEOUT_S = float(os.environ.get("JINGO_FFMPEG_TIMEOUT_S", "60"))
+
+
 def _guard_audio_url(audio_url: str) -> None:
     """SSRF guard, run before any network I/O.
 
@@ -42,17 +51,57 @@ def download_and_normalize(audio_url: str, dest_dir: str) -> str:
     os.close(fd)
     wav_path = in_path.rsplit(".", 1)[0] + ".wav"
     try:
-        with httpx.stream("GET", audio_url, timeout=30.0, follow_redirects=True) as r:
+        # follow_redirects=False: _guard_audio_url only vets the URL we were
+        # given. With automatic redirects an allowlisted origin could bounce us
+        # to an internal host and the guard would never see the final target.
+        with httpx.stream("GET", audio_url, timeout=30.0, follow_redirects=False) as r:
             r.raise_for_status()
+            # Early exit on a declared oversized body, before reading any of it.
+            # The streaming counter below is the real guard (Content-Length is
+            # absent on chunked responses and can lie), but this avoids pulling
+            # an obviously-too-large body into memory one chunk at a time.
+            declared = r.headers.get("content-length")
+            if declared and declared.isdigit() and int(declared) > _MAX_DOWNLOAD_BYTES:
+                raise AudioFetchError(
+                    f"audio exceeds {_MAX_DOWNLOAD_BYTES} bytes")
+            # Cap the streamed body: the URL is remote and only partially
+            # trusted, so an oversized/endless response must not fill /tmp.
+            written = 0
             with open(in_path, "wb") as f:
                 for chunk in r.iter_raw():
+                    written += len(chunk)
+                    if written > _MAX_DOWNLOAD_BYTES:
+                        raise AudioFetchError(
+                            f"audio exceeds {_MAX_DOWNLOAD_BYTES} bytes")
                     f.write(chunk)
-        subprocess.run(
-            ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-             "-i", in_path, "-ac", "1", "-ar", "16000",
-             "-sample_fmt", "s16", wav_path],
-            check=True,
-        )
+        try:
+            subprocess.run(
+                # Mirrors normalize_upload's hardening:
+                # -protocol_whitelist keeps a crafted playlist/concat input from
+                #   reaching back out over the network; -t hard-caps the OUTPUT
+                #   duration so a decompression bomb can't write a huge WAV.
+                ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+                 "-protocol_whitelist", "file,pipe", "-i", in_path,
+                 "-t", str(_MAX_AUDIO_SECONDS + 1),
+                 "-ac", "1", "-ar", "16000",
+                 "-sample_fmt", "s16", wav_path],
+                check=True,
+                timeout=_FFMPEG_TIMEOUT_S,
+            )
+        except subprocess.TimeoutExpired:
+            raise AudioFetchError(f"ffmpeg timed out after {_FFMPEG_TIMEOUT_S}s")
+        # Same belt-and-braces check normalize_upload does: ffmpeg can exit 0
+        # without writing the output (e.g. a demux failure that doesn't set a
+        # non-zero status). Returning a nonexistent path would surface as an
+        # unexpected exception in the caller instead of 'audio_unreachable'.
+        if not os.path.exists(wav_path):
+            raise AudioFetchError("ffmpeg produced no output")
+        # -t caps the transcode at max+1s; verify the result like
+        # normalize_upload does, so an over-length clip cannot reach the engine.
+        seconds = os.path.getsize(wav_path) / (16000 * 2)
+        if seconds > _MAX_AUDIO_SECONDS:
+            raise AudioFetchError(
+                f"audio too long: {seconds:.1f}s > {_MAX_AUDIO_SECONDS}s")
         return wav_path
     except Exception:
         if os.path.exists(wav_path):
@@ -88,6 +137,7 @@ def normalize_upload(data: bytes, dest_dir: str, max_seconds: float) -> str:
              "-t", str(max_seconds + 1),
              "-ac", "1", "-ar", "16000", "-sample_fmt", "s16", wav_path],
             capture_output=True,
+            timeout=_FFMPEG_TIMEOUT_S,
         )
         if proc.returncode != 0 or not os.path.exists(wav_path):
             raise AudioFetchError("could not decode audio")
